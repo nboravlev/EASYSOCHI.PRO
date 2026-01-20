@@ -1,0 +1,42 @@
+# --- Секреты и настройки (САМОЕ ВАЖНОЕ) ---
+.env
+*.env
+secrets/
+*.txt
+*.pem
+
+# Но разрешить файл с примером
+!/.env.example
+
+# --- Docker ---
+.docker/
+# Не игнорируем docker-compose.yml, он нужен в гите
+
+# --- Python (Backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+.mypy_cache/
+alembic/versions/*.pyc
+
+# --- Hugo (Frontend) ---
+public/
+resources/
+.hugo_build.lock
+hugo_extended_*.tar.gz*
+
+# --- Логи и временные файлы ---
+logs/
+*.log
+tmp/
+.DS_Store
+Thumbs.db
+
+# --- Базы данных (локальные дампы) ---
+*.sql
+*.sqlite

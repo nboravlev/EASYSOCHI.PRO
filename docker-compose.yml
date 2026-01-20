@@ -1,0 +1,52 @@
+services:
+  # --- База данных ---
+  db_easysochi:
+    image: postgres:15
+    container_name: postgres_db_easysochi
+    restart: always
+    env_file: .env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432" 
+    volumes:
+      - postgres_data_easysochi:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Сайт (Frontend) ---
+  easysochi-site:
+    build:
+      context: ./easysochi-site
+      dockerfile: Dockerfile
+    container_name: easysochi_site
+    restart: unless-stopped
+    ports:
+      - "${SITE_PORT_EXTERNAL:-1313}:80" 
+    volumes:
+      - ./easysochi-site/logs:/var/log/nginx
+      - ./easysochi-site/public:/usr/share/nginx/html
+
+  # --- Бэкенд (API) ---
+  contact_api:
+    build:
+      context: ./easysochi-backend
+      dockerfile: Dockerfile
+    container_name: easysochi_contact_api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${API_PORT_EXTERNAL:-8000}:8000" 
+    depends_on:
+      db_easysochi:
+        condition: service_healthy
+
+volumes:
+  postgres_data_easysochi:
+    external: true
+    name: easysochi_temp_postgres_data_easysochi
