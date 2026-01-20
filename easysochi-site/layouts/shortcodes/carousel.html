@@ -1,0 +1,117 @@
+{{/* layouts/shortcodes/carousel.html */}}
+{{ $slides := split (trim (.Inner) " \t\n\r") "\n" }}
+
+<div class="carousel-container">
+  <div class="carousel" id="carousel-slides">
+    {{ range $index, $line := $slides }}
+      {{ $parts := split $line "|" }}
+      {{ $img := index $parts 0 }}
+      {{ $link := "" }}
+      {{ $caption := "" }}
+
+      {{ if gt (len $parts) 1 }}
+        {{ $link = index $parts 1 }}
+      {{ end }}
+
+      {{ if gt (len $parts) 2 }}
+        {{ $caption = index $parts 2 }}
+      {{ end }}
+
+      <div class="carousel-slide{{ if eq $index 0 }} active{{ end }}" data-index="{{ add $index 1 }}">
+        {{ if $link }}
+          <a href="{{ $link }}" target="_blank" rel="noopener">
+            <img src="{{ $img }}" alt="{{ $caption }}">
+          </a>
+        {{ else }}
+          <img src="{{ $img }}" alt="{{ $caption }}">
+        {{ end }}
+        {{ if $caption }}
+          <div class="carousel-caption">{{ $caption }}</div>
+        {{ end }}
+      </div>
+    {{ end }}
+  </div>
+
+  <button class="carousel-prev">&lt;</button>
+  <button class="carousel-next">&gt;</button>
+</div>
+
+<style>
+.carousel-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 30px auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.carousel {
+  display: flex;
+  transition: transform 0.5s ease-in-out;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.carousel-caption {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 1rem;
+  color: #333;
+}
+
+.carousel-prev,
+.carousel-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.carousel-prev { left: 10px; }
+.carousel-next { right: 10px; }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const slides = document.querySelectorAll("#carousel-slides .carousel-slide");
+  const prevBtn = document.querySelector(".carousel-prev");
+  const nextBtn = document.querySelector(".carousel-next");
+  let currentIndex = 0;
+
+  function showSlide(index) {
+    slides.forEach((slide, i) => {
+      slide.classList.toggle("active", i === index);
+    });
+    const offset = -index * 100;
+    document.querySelector("#carousel-slides").style.transform = `translateX(${offset}%)`;
+  }
+
+  prevBtn.addEventListener("click", () => {
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    showSlide(currentIndex);
+  });
+
+  nextBtn.addEventListener("click", () => {
+    currentIndex = (currentIndex + 1) % slides.length;
+    showSlide(currentIndex);
+  });
+
+  showSlide(currentIndex);
+});
+</script>

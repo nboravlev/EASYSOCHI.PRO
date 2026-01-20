@@ -1,0 +1,30 @@
+
+
+
+<figure>
+  <img src="{{ .Get "src" }}" alt="{{ .Get "alt" }}">
+  <figcaption>{{ .Get "caption" }}</figcaption>
+</figure>
+
+<style>
+  figure {
+    text-align: center;
+    margin: 20px auto;
+    max-width: fit-content;      
+  }
+  
+  figure img {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;              
+  }
+  
+  figcaption {
+    font-size: 0.9em;
+    color: #666;
+    font-style: italic;
+    margin-top: 10px;
+  }
+</style>

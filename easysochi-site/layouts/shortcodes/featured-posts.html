@@ -1,0 +1,112 @@
+<div class="featured-posts-grid">
+  {{ range first (.Get "count" | default "3") (where .Site.RegularPages "Type" "blog") }}
+    <article class="featured-post">
+      {{ if .Params.image }}
+        <div class="post-thumbnail">
+          <a href="{{ .Permalink }}">
+            <img src="{{ .Params.image }}" alt="{{ .Title }}" loading="lazy">
+          </a>
+        </div>
+      {{ end }}
+      
+      <div class="post-preview">
+        <h3><a href="{{ .Permalink }}">{{ .Title }}</a></h3>
+        <p class="post-meta">{{ .Date.Format "Jan 2, 2006" }} • {{ .ReadingTime }} min read</p>
+        <p class="post-summary">{{ .Summary }}</p>
+        <a href="{{ .Permalink }}" class="read-more">Read More →</a>
+      </div>
+    </article>
+  {{ end }}
+</div>
+
+<style>
+  .featured-posts-grid {
+    display: grid;
+    gap: 30px;
+    margin: 40px 0;
+  }
+
+  .featured-post {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+  }
+
+  .featured-post:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .post-thumbnail {
+    overflow: hidden;
+    height: 200px;
+  }
+
+  .post-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+
+  .featured-post:hover .post-thumbnail img {
+    transform: scale(1.05);
+  }
+
+  .post-preview {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .post-preview h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.3em;
+  }
+
+  .post-preview h3 a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .post-preview h3 a:hover {
+    color: #0066cc;
+  }
+
+  .post-meta {
+    font-size: 0.85em;
+    color: #666;
+    margin: 0 0 10px 0;
+  }
+
+  .post-summary {
+    flex-grow: 1;
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 15px 0;
+  }
+
+  .read-more {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .read-more:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 768px) {
+    .featured-post {
+      grid-template-columns: 1fr;
+    }
+
+    .post-thumbnail {
+      height: 250px;
+    }
+  }
+</style>

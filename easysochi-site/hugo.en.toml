@@ -1,0 +1,51 @@
+
+baseURL = "https://easysochi.pro"
+languageCode = "en-us"
+title = "EasySochi - Intelligent Chatbot Platform"
+theme = "PaperMod"
+
+
+[outputs]
+home = ['HTML', 'JSON']
+
+[markup]
+[markup.goldmark]
+[markup.goldmark.renderer]
+unsafe = true
+
+# Menu navigation
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Services"
+    url = "/services/"
+    weight = 2
+  [[menu.main]]
+    name = "Blog"
+    url = "/blog/"
+    weight = 3
+  [[menu.main]]
+    name = "Contact"
+    url = "/contact/"
+    weight = 4
+
+[params]
+description = 'Develop and deploy intelligent Telegram chatbots with ease'
+author = 'EasySochi Team'
+favicon = '/favicon.png'
+
+# Site logo
+logoText = 'EasySochi.PRO'
+logoAlt = 'EasySochi Logo'
+
+
+[[params.social]]
+id = 'github'
+url = 'https://github.com/nboravlev'
+
+[[params.social]]
+id = 'linkedin'
+url = 'https://www.linkedin.com/in/nikolai-boravlev'

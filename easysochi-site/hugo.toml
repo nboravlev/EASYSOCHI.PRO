@@ -1,0 +1,82 @@
+baseURL = "https://easysochi.pro"
+title = "EASYSOCHI — студия разработки ПО для автоматизации бизнеса"
+languageCode = "ru-ru"
+defaultContentLanguage = "ru"
+theme = "PaperMod"
+
+# Форматы вывода (HTML + JSON — пригодится для поиска)
+[outputs]
+home = ["HTML", "JSON"]
+
+# Поддержка HTML внутри Markdown
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+# Главное меню сайта
+[menu]
+  [[menu.main]]
+    name = "Главная"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Услуги"
+    url = "/services/"
+    weight = 2
+  [[menu.main]]
+    name = "Блог"
+    url = "/blog/"
+    weight = 3
+  [[menu.main]]
+    name = "Рубль"
+    url = "/support/"
+    weight = 4
+  [[menu.main]]
+    name = "Контакты"
+    url = "/contact/"
+    weight = 5
+
+# Основные параметры сайта
+[params]
+  description = "Разрабатываем Telegram-ботов, базы данных и веб-сайты для автоматизации бизнеса. Интеллектуальные решения от EasySochi."
+  author = "EasySochi Team"
+  favicon = "/favicon.ico"
+  defaultTheme = "auto"  # автоматически переключает светлую/тёмную тему
+  dateFormat = "02.01.2006"
+  inn = "ИНН 614315844953"
+
+  # Логотип и заголовок
+  logoText = "EasySochi.PRO"
+  logoAlt = "EasySochi — разработка сайтов и чат-ботов для бизнеса"
+
+  # SEO и Open Graph (чтобы красиво выглядели ссылки в Telegram/WhatsApp)
+  keywords = ["чат-боты", "разработка сайтов", "базы данных", "автоматизация бизнеса", "telegram bot", "Сочи"]
+  images = ["/images/og-banner.jpg"]
+
+  showReadingTime = true
+  showPostNavLinks = true
+  showBreadCrumbs = false
+  showPostEndsOn = true
+
+
+[params.cover]
+    page = true        # Показывать hero внутри статьи
+    list = true        # Показывать миниатюры в списке (на странице /blog)
+
+# Социальные ссылки
+[[params.social]]
+  id = "github"
+  url = "https://github.com/nboravlev"
+
+[[params.social]]
+  id = "telegram"
+  url = "https://t.me/SochiBotDeveloper"
+
+[[params.social]]
+  id = "linkedin"
+  url = "https://www.linkedin.com/in/nikolai-boravlev/"
+
+[[params.social]]
+  id = "email"
+  url = "mailto:info@easysochi.pro"

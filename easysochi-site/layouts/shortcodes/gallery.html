@@ -1,0 +1,65 @@
+{{/* layouts/shortcodes/gallery.html */}}
+
+{{ $lines := split (trim (.Inner) " \t\n\r") "\n" }}
+
+<div class="gallery">
+  {{ range $lines }}
+    {{ $parts := split . "|" }}
+    {{ $img := index $parts 0 }}
+    {{ $link := "" }}
+    {{ $caption := "" }}
+
+    {{ if gt (len $parts) 1 }}
+      {{ $link = index $parts 1 }}
+    {{ end }}
+
+    {{ if gt (len $parts) 2 }}
+      {{ $caption = index $parts 2 }}
+    {{ end }}
+
+    <div class="gallery-item">
+      {{ if $link }}
+        <a href="{{ $link }}">
+          <img src="{{ $img }}" alt="{{ $caption }}" loading="lazy">
+        </a>
+      {{ else }}
+        <img src="{{ $img }}" alt="{{ $caption }}" loading="lazy">
+      {{ end }}
+      {{ if $caption }}
+        <div class="gallery-caption">{{ $caption }}</div>
+      {{ end }}
+    </div>
+  {{ end }}
+</div>
+
+<style>
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+}
+
+.gallery-item {
+  max-width: 300px;
+  flex: 1 1 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gallery-item img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.gallery-caption {
+  margin-top: 5px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #333;
+}
+</style>
