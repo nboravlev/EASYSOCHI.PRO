@@ -1,0 +1,94 @@
+{{- if lt hugo.Version "0.146.0" }}
+{{- errorf "=> hugo v0.146.0 or greater is required for hugo-PaperMod to build " }}
+{{- end -}}
+
+<!DOCTYPE html>
+{{- $theme := site.Params.defaultTheme | default "auto" }}
+{{- if eq $theme "dark" }}
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default "auto" }}" data-theme="dark">
+{{- else if eq $theme "light" }}
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default "auto" }}" data-theme="light">
+{{- else }}
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default "auto" }}" data-theme="auto">
+{{- end }}
+
+<head>
+    {{- partial "head.html" . }}
+    <style>
+                .side-social-bar {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 9999;
+        }
+
+        .social-item {
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.15); /* Полупрозрачный фон */
+            backdrop-filter: blur(10px); /* Эффект стекла */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .social-item img {
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+        }
+
+        .social-item:hover {
+            transform: scale(1.1) translateX(-5px);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        /* На мобилках лучше спрятать или перенести вниз */
+        @media screen and (max-width: 768px) {
+            .side-social-bar {
+                right: 10px;
+                gap: 10px;
+            }
+            .social-item {
+                width: 38px;
+                height: 38px;
+            }
+        }
+    </style>
+</head>
+
+{{- if (or (ne .Kind `page` ) (eq .Layout `archives`) (eq .Layout `search`)) }}
+<body class="list" id="top">
+{{- else }}
+<body id="top">
+{{- end }}
+    {{ partialCached "header.html" . .Page -}}
+    <main class="main">
+        {{- block "main" . }}{{ end }}
+    </main>
+    {{ partialCached "footer.html" . .Layout .Kind (.Param "hideFooter") (.Param "ShowCodeCopyButtons") -}}
+        <div class="side-social-bar">
+            {{- range site.Params.social -}}
+            {{- $url := .url | safeURL -}}
+            {{- $img := resources.Get (printf "images/social/%s.png" .id) -}}
+            <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="social-item">
+                {{- if $img -}}
+                    <img src="{{ $img.RelPermalink }}" alt="{{ .id }}" />
+                {{- else -}}
+                    <span>{{ .id | title }}</span>
+                {{- end -}}
+            </a>
+            {{- end -}}
+        </div>
+</body>
+
+</html>

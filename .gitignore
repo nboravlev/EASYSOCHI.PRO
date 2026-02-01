@@ -29,6 +29,7 @@ public/
 resources/
 .hugo_build.lock
 hugo_extended_*.tar.gz*
+.hugo_build.lock
 
 # --- Логи и временные файлы ---
 logs/
@@ -40,3 +41,7 @@ Thumbs.db
 # --- Базы данных (локальные дампы) ---
 *.sql
 *.sqlite
+
+
+#прогресс
+progress.md

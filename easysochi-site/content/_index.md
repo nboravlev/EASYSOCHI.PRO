@@ -1,6 +1,6 @@
 ---
 title: "EasySochi - это легко!"
-description: "Автоматизируем процессы с 2023 г."
+description: "Автоматизируем процессы для бизнеса с 2023 г. Сайты, приложения, чат-боты, аналитика под ключ!"
 draft: false
 ---
 {{< respimg
@@ -39,6 +39,7 @@ draft: false
 /images/tomodify/reader_300.png|/support/|Читательский ассистент. Поддержи!
 /images/tomodify/rent_300.png|https://t.me/EasySochi_rent_bot?start=easysochipro|Квартирный бот
 /images/products/honey_30.png|https://t.me/KrasPolHoney_bot|Медовый бот
+/images/products/freeride_1_r20.png|https://easy-sochi.ru/|Спорт и походы в Сочи
 {{< /carousel >}}
 
 [Начать](/services/) | [Связаться](/about/)

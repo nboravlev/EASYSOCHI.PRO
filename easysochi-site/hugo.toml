@@ -66,16 +66,13 @@ home = ["HTML", "JSON"]
 
 # Социальные ссылки
 [[params.social]]
-  id = "github"
-  url = "https://github.com/nboravlev"
+  id = "phone"
+  url = "tel:+79951236068"
 
 [[params.social]]
   id = "telegram"
   url = "https://t.me/SochiBotDeveloper"
 
-[[params.social]]
-  id = "linkedin"
-  url = "https://www.linkedin.com/in/nikolai-boravlev/"
 
 [[params.social]]
   id = "email"
