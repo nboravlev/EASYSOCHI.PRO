@@ -102,7 +102,7 @@ draft: false
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   // === НАСТРОЙКИ ===
-  const API_BASE_URL = "/donation"; 
+  const API_BASE_URL = "/api/v2/donations"; 
 
   // --- Получаем элементы (и сразу проверяем их существование в логике ниже) ---
   const buttons = document.querySelectorAll(".donate-btn");

@@ -19,7 +19,7 @@ from app.db.models.payments import Payment, PaymentStatus
 from app.db.models.payment_events import PaymentEvent
 
 # --- Настройка ---
-router = APIRouter(prefix="/donation", tags=["donation"])
+router = APIRouter(tags=["donation"])
 logger = logging.getLogger(__name__)
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")

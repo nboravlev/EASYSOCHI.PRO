@@ -5,7 +5,7 @@ from app.db.db_async import get_async_session
 from app.db.models.contact_form import ContactForm
 import httpx, os, logging
 
-router = APIRouter(prefix="/form", tags=["form"])
+router = APIRouter(tags=["form"])
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -40,12 +40,14 @@ async def receive_form(request: Request, db: AsyncSession = Depends(get_async_se
 
     # Отправка уведомления в Telegram
     text = f"📩 Новая заявка:\nИмя: {name}\nEmail: {email}\nСообщение:\n{message}"
+    print(f"DEBUG: Sending to TG: {text} to chat {CHAT_ID}")
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
+            response = await client.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
                 json={"chat_id": CHAT_ID, "text": text}
             )
+            print(f"DEBUG: TG API Response: {response.text}")
     except httpx.HTTPError as e:
         logger.warning(f"Telegram notification failed: {e}")
 
