@@ -64,6 +64,7 @@
             }
         }
     </style>
+    {{ partial "metrics.html" . }}
 </head>
 
 {{- if (or (ne .Kind `page` ) (eq .Layout `archives`) (eq .Layout `search`)) }}
@@ -89,6 +90,6 @@
             </a>
             {{- end -}}
         </div>
-</body>
+    
 
 </html>

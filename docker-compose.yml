@@ -37,6 +37,7 @@ services:
     build:
       context: ./easysochi-backend
       dockerfile: Dockerfile
+    user: "1000:1000"
     container_name: easysochi_contact_api
     restart: unless-stopped
     env_file: .env
