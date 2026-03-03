@@ -21,5 +21,9 @@ async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 app.include_router(form.router, prefix="/api/v2/form", tags=["Form"])
 app.include_router(donations.router, prefix="/api/v2/donations", tags=["Donations"])

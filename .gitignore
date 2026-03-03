@@ -2,9 +2,7 @@
 .env
 *.env
 secrets/
-*.txt
 *.pem
-
 
 # Но разрешить файл с примером
 !/.env.example

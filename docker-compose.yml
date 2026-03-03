@@ -18,6 +18,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - easysochipro_net
 
   # --- Сайт (Frontend) ---
   easysochi-site:
@@ -26,11 +28,15 @@ services:
       dockerfile: Dockerfile
     container_name: easysochi_site
     restart: unless-stopped
-    ports:
-      - "${SITE_PORT_EXTERNAL:-1313}:80" 
     volumes:
-      - ./easysochi-site/logs:/var/log/nginx
-      - ./easysochi-site/public:/usr/share/nginx/html
+      - easysochipro_media:/usr/share/nginx/html/media
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - easysochipro_net
 
   # --- Бэкенд (API) ---
   contact_api:
@@ -41,13 +47,87 @@ services:
     container_name: easysochi_contact_api
     restart: unless-stopped
     env_file: .env
-    ports:
-      - "${API_PORT_EXTERNAL:-8000}:8000" 
+    volumes:
+      - easysochipro_media:/app/media
     depends_on:
       db_easysochi:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - easysochipro_net
+        
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: easysochi_nginx
+    restart: unless-stopped
+    ports:
+      - "21500:21500"
+    volumes:
+      - easysochipro_logs:/var/log/nginx
+      - easysochipro_stats:/var/www/stats
+      - easysochipro_media:/var/www/media
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    env_file: .env
+    depends_on:
+      easysochi-site:
+        condition: service_healthy
+      contact_api:
+        condition: service_healthy
+    networks:
+      - easysochipro_net
+
+  goaccess_pro:
+    image: allinurl/goaccess
+    container_name: goaccess_pro
+    restart: always
+    environment:
+      - TZ=Europe/Moscow
+    volumes:
+      - easysochipro_logs:/opt/goaccess/logs:ro
+      - easysochipro_stats:/var/www/stats
+    command: >
+      /opt/goaccess/logs/easysochi.pro_access.log
+      --log-format=COMBINED
+      --real-time-html
+      --no-global-config
+      --addr=0.0.0.0
+      --port=7890
+      --ws-url=wss://stats.easysochi.pro/ws
+      --output=/var/www/stats/index.html
+    networks:
+      - easysochipro_net
 
 volumes:
   postgres_data_easysochi:
-    external: true
-    name: easysochi_temp_postgres_data_easysochi
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi_pro/postgres_data
+  easysochipro_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi_pro/media
+  easysochipro_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi_pro/logs
+  easysochipro_stats:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/easysochi_pro/stats
+networks:
+  easysochipro_net:
+    driver: bridge

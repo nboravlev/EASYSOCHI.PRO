@@ -1,0 +1,21 @@
+fastapi==0.115.0
+uvicorn==0.32.0
+httpx==0.27.0
+python-dotenv==1.0.1
+
+# --- Database & ORM ---
+SQLAlchemy==2.0.35
+asyncpg==0.29.0
+
+# --- Migrations ---
+alembic==1.13.3
+
+# --- Optional but useful ---
+psycopg2-binary==2.9.9     # иногда полезен для локальных тестов sync-подключения
+pydantic==2.9.2            # если FastAPI ещё не подтянул сам
+pydantic-settings==2.5.2   # для управления конфигом через .env (альтернатива python-dotenv)
+
+
+
+#ukassa
+yookassa

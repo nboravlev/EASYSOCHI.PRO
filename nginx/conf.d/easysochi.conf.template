@@ -1,0 +1,98 @@
+# ========================================
+# HTTP - EasySochi Website (.pro) - API V2
+# ========================================
+server {
+    listen 21500;
+    server_name ${DOMAIN_PRO} www.${DOMAIN_PRO};
+
+    include /etc/nginx/conf.d/cloudflare_ids.conf;
+
+    access_log /var/log/nginx/easysochi.pro_access.log;
+    error_log /var/log/nginx/easysochi.pro_error.log;
+
+    location /api/v2/ {
+        proxy_pass http://contact_api:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        add_header Access-Control-Allow-Origin "https://${DOMAIN_PRO}" always;
+        add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS' always;
+        add_header Access-Control-Allow-Headers 'Content-Type, Authorization' always;
+
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+
+        location ~* webhook {
+            if ($is_payment_service = 0) {
+                return 403;
+            }
+            proxy_pass http://contact_api:8000;
+        }
+    }
+
+    location /media/ {
+        alias /var/www/media/;
+        access_log off;
+        expires 30d;
+    }
+
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|pdf|woff|woff2)$ {
+        access_log off;
+        expires 30d;
+        proxy_pass http://easysochi-site:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location / {
+        proxy_pass http://easysochi-site:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_buffering on;
+        proxy_set_header Connection "";
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+}
+
+# ========================================
+# HTTP - Статистика GoAccess
+# ========================================
+server {
+    listen 21500;
+    server_name ${PRO_STATS};
+
+    resolver 127.0.0.11 valid=30s;
+
+    auth_basic "Restricted Access";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        root /var/www/stats;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /ws {
+        auth_basic off;
+        set $goaccess_backend goaccess_pro;
+        proxy_pass http://$goaccess_backend:7890;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 7d;
+        proxy_send_timeout 7d;
+        proxy_buffering off;
+    }
+}
