@@ -98,7 +98,7 @@ services:
       --no-global-config
       --addr=0.0.0.0
       --port=7890
-      --ws-url=wss://stats.easysochi.pro/ws
+      --ws-url=wss://stats.easysochi.pro:443/ws
       --output=/var/www/stats/index.html
     networks:
       - easysochipro_net
