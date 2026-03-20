@@ -31,7 +31,7 @@ draft: false
   <textarea id="message" name="message" rows="5" required style="width:100%; padding:8px;"></textarea><br><br>
 
   <p style="font-size: 0.9rem; color:#555;">
-    Нажимая на кнопку <strong>«Отправить»</strong>, вы соглашаетесь на обработку персональных данных (Имя и Email).
+    Нажимая на кнопку <strong>«Отправить»</strong>, вы соглашаетесь на обработку персональных данных (Имя и Email) в соответствии с <a href="/privacy-policy/" target="_blank">Политикой конфиденциальности</a>.
   </p>
 
   <button type="submit" style="padding:10px 20px;">Отправить</button>

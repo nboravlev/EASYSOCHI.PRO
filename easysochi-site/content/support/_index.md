@@ -95,6 +95,9 @@ draft: false
   <div class="modal-footer">
       <p class="selected-sum-text">Сумма: <span id="modal-sum-display">0</span> ₽</p>
       <button id="final-pay-btn">Перейти к оплате</button>
+      <p style="font-size: 0.9rem; color:#555;">
+        Нажимая на кнопку <strong>«Перейти к оплате»</strong>, вы соглашаетесь с <a href="/agreement/" target="_blank">офертой</a> и <a href="/privacy-policy/" target="_blank">Политикой конфиденциальности</a>.
+      </p>
     </div>
   </div>
 </div>
