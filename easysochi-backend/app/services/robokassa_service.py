@@ -82,7 +82,7 @@ class RobokassaService(PaymentService):
             if value:
                 redirect_url += f"&{key}={value}"
         
-        print(f"PAYMENT DEBUG: Final interpreted test_mode: {self.test_mode}, flush=True")
+        logger.debug("Robokassa test_mode=%s", self.test_mode)
         # Добавляем тестовый режим
         if self.test_mode:
             redirect_url += "&IsTest=1"
