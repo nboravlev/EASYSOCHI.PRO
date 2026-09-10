@@ -37,6 +37,13 @@ cp .env.example .env
 ```
 
 ### 3. Создание .htpasswd для stats.easysochi.pro
+
+> ⚠️ **Обязательный шаг — выполнить до `docker compose up`.**
+> Файл `.htpasswd` не хранится в репозитории (он в `.gitignore`), поэтому после
+> `git clone` его на сервере нет. В `docker-compose.yml` он монтируется как
+> `./.htpasswd:/etc/nginx/.htpasswd:ro` — если файла не существует, Docker создаст
+> на его месте **директорию**, и контейнер nginx упадёт при старте.
+
 ```bash
 htpasswd -c .htpasswd <username>
 ```
