@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 async def receive_form(request: Request, db: AsyncSession = Depends(get_async_session)):
     # Получаем данные из запроса
     data = await request.json()
-    #print(f"DEBUG: received data = {data}")  # для проверки
 
     name = data.get("name")
     email = data.get("email")
@@ -31,7 +30,7 @@ async def receive_form(request: Request, db: AsyncSession = Depends(get_async_se
         db.add(form_entry)
         await db.commit()
         await db.refresh(form_entry)
-        print(f"Inserted record with ID: {form_entry.id}")
+        logger.info("Contact form saved, id=%s", form_entry.id)
 
     except SQLAlchemyError as e:
         await db.rollback()
@@ -40,14 +39,15 @@ async def receive_form(request: Request, db: AsyncSession = Depends(get_async_se
 
     # Отправка уведомления в Telegram
     text = f"📩 Новая заявка:\nИмя: {name}\nEmail: {email}\nСообщение:\n{message}"
-    #print(f"DEBUG: Sending to TG: {text} to chat {CHAT_ID}")
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
                 json={"chat_id": CHAT_ID, "text": text}
             )
-            print(f"DEBUG: TG API Response: {response.text}")
+            # Тело ответа Telegram содержит эхо отправленного сообщения,
+            # то есть имя, email и текст заявки — логируем только статус
+            logger.info("Telegram notification sent, status=%s", response.status_code)
     except httpx.HTTPError as e:
         logger.warning(f"Telegram notification failed: {e}")
 

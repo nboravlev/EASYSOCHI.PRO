@@ -174,6 +174,30 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
 Проверить в личном кабинете Robokassa: перестали ли повторяться уведомления
 по одному InvId.
 
+2026-09-10
+*chore/logging-hygiene
+
+Что сделано:
+- SQLAlchemy больше не пишет запросы в лог: db_async.py задавал
+  sqlalchemy.engine уровень INFO, из-за чего в docker logs попадали email'ы,
+  имена и SignatureValue платежей. Теперь WARNING по умолчанию, INFO включается
+  переменной SQL_ECHO=1. Уровень задан явно, а не наследуется от корневого
+  логгера: SQLAlchemy проверяет isEnabledFor(INFO), и при root=INFO запросы
+  вернулись бы в лог
+- убрал logging.basicConfig() из db_async.py: настройка корневого логгера как
+  побочный эффект импорта модуля БД. Настройка перенесена в main.py, уровень
+  задаётся переменной LOG_LEVEL
+- побочный эффект прежней схемы: у root оставался уровень WARNING, поэтому все
+  logger.info из наших модулей никуда не попадали. Теперь они видны
+- добавил фильтр на uvicorn.access, отбрасывающий запросы /health: healthcheck
+  ходит каждые 10 секунд, это ~8600 строк в сутки, которые вытесняли полезные
+  записи из окна ротации docker-логов
+- убрал print с персональными данными: form.py печатал тело ответа Telegram,
+  а оно содержит эхо отправленного сообщения — имя, email и текст заявки
+- убрал PAYMENT DEBUG из robokassa_service и логирование полного payload
+  вебхука в donations.py (там Shp_email, Shp_name, SignatureValue)
+- добавил LOG_LEVEL и SQL_ECHO в .env.example
+
 ================================План на обновление EASYSOCHI.PRO======================
 *******************Приоритет: Высокий*****************************************
 [x] - политику обработки данных изобрести и ссылку прикрепить при отправке любой формы
@@ -212,6 +236,12 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
 [] - тома с driver_opts type=none/o=bind — это bind-mount, переодетый в volume. Ловушка:
      при смене device: докер не пересоздаёт том, пока не сделать docker volume rm, и
      изменения молча не применяются. Заменить на обычные bind-mount
+
+[] - .env.example не соответствует коду после перехода на Robokassa: в нём остались
+     YOOKASSA_*, а ROBOKASSA_SHOP_ID / PASSWORD_1 / PASSWORD_2 / TEST_MODE отсутствуют.
+     На новом сервере платежи молча не заведутся — settings подставит пустые строки
+[] - app/routers/_donations.py — старый роутер ЮKassa, нигде не импортируется.
+     Удалить или перенести в отдельную ветку, чтобы не путал при поиске по коду
 
 ********************Приоритет: Низкий*******************************************
 [] - 

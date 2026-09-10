@@ -101,8 +101,9 @@ async def payment_webhook(
         form_data = await request.form()
         data = dict(form_data)
         
-        logger.info(f"Webhook data: {data}")
-        
+        # Полный payload не логируем: в нём Shp_email, Shp_name и SignatureValue.
+        # InvId и OutSum пишет process_webhook.
+
         result = await payment_service.process_webhook(data, db)
         
         if "error" in result:
