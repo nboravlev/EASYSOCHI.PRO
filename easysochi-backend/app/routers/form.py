@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 async def receive_form(request: Request, db: AsyncSession = Depends(get_async_session)):
     # Получаем данные из запроса
     data = await request.json()
-    print(f"DEBUG: received data = {data}")  # для проверки
+    #print(f"DEBUG: received data = {data}")  # для проверки
 
     name = data.get("name")
     email = data.get("email")
@@ -40,7 +40,7 @@ async def receive_form(request: Request, db: AsyncSession = Depends(get_async_se
 
     # Отправка уведомления в Telegram
     text = f"📩 Новая заявка:\nИмя: {name}\nEmail: {email}\nСообщение:\n{message}"
-    print(f"DEBUG: Sending to TG: {text} to chat {CHAT_ID}")
+    #print(f"DEBUG: Sending to TG: {text} to chat {CHAT_ID}")
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
