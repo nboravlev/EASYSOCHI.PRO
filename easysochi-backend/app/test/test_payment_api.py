@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
+Установка pytest прямо в контейнер
+
+docker compose exec contact_api pip install pytest
+
 Тестовый скрипт для проверки API платежей Robokassa
-Запуск: docker compose exec app python scripts/test_payment_api.py
+
+Запуск: docker compose exec contact_api python -m pytest app/test/test_payment_api.py -v
 """
 
 import sys
