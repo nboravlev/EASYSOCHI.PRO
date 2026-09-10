@@ -116,6 +116,43 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
 [] - сменить пароль basic auth для stats.easysochi.pro: htpasswd -c .htpasswd pro
      старый хеш остаётся в истории коммитов публичного репозитория, ротация обязательна
 
+2026-09-10
+*feat/docker-hardening
+
+Что сделано (по итогам ревью сборки docker):
+- закрыл публикацию порта Postgres: было "${POSTGRES_PORT}:5432" на 0.0.0.0, стало
+  "127.0.0.1:${POSTGRES_PORT}:5432". База больше не видна из интернета, доступ из
+  SQL-клиента через SSH-туннель работает как раньше. Важно: docker пишет правила
+  напрямую в цепочку DOCKER в iptables и обходит ufw, поэтому host_ip тут —
+  единственная реальная защита
+- починил определение реального IP клиента: cloudflare_ids.conf переименован в
+  real_ip.conf, вместо real_ip_header CF-Connecting-IP теперь X-Forwarded-For с
+  real_ip_recursive on, в доверенные сети добавлены верхний прокси и docker-подсети.
+  До этого $remote_addr был адресом верхнего прокси, из-за чего geo $is_payment_service
+  всегда возвращал 0 и вебхуки ЮKassa получали 403, а GoAccess считал всех посетителей
+  одним IP
+- убрал дублирующий include cloudflare_ids.conf из server-блока: файл и так
+  подключается автоматически через include conf.d/*.conf на уровне http
+- ограничил логи docker: якорь x-logging с max-size 10m / max-file 3 на все 5 сервисов
+- добавил deploy/logrotate/easysochi_pro для ротации логов nginx на хосте,
+  описал установку в README (шаг 5)
+- GoAccess переведён на --persist/--restore с БД в отдельном томе, теперь ротация
+  лога не стирает накопленную статистику
+- миграции применяются автоматически: easysochi-backend/entrypoint.sh делает
+  alembic upgrade head и затем exec uvicorn. В healthcheck contact_api добавлен
+  start_period 40s, чтобы миграции успели пройти до первой проверки
+- удалил из main.py startup-хук с create_all: он вызывался у Base из db_async.py, а все
+  модели наследуются от Base из db.py, то есть metadata была пустая и хук ничего не делал
+- добавил PYTHONUNBUFFERED=1 в Dockerfile бэкенда, иначе вывод alembic буферизуется
+  и теряется, если контейнер падает на миграции
+
+Требует проверки на сервере:
+[] - доходят ли вебхуки ЮKassa после фикса real_ip:
+     grep -i webhook /data/easysochi_pro/logs/easysochi.pro_access.log | tail -20
+     Фикс исходит из того, что верхний прокси проставляет X-Forwarded-For. Если он его
+     не ставит, $remote_addr не подменится и 403 останется — тогда чинить верхний прокси
+[] - показывает ли GoAccess разные IP посетителей после перезапуска nginx
+
 ================================План на обновление EASYSOCHI.PRO======================
 *******************Приоритет: Высокий*****************************************
 [x] - политику обработки данных изобрести и ссылку прикрепить при отправке любой формы
@@ -127,13 +164,49 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
 [x] - добавить яндекс.метрику и вебмастер
 
 
+--- инфраструктура, по итогам ревью docker 2026-09-10 ---
+[] - секреты раздаются контейнерам, которым не нужны: env_file: .env стоит у nginx и
+     db_easysochi. Nginx получает TELEGRAM_TOKEN/POSTGRES_PASSWORD/YOOKASSA_SECRET_KEY,
+     хотя ему нужны только DOMAIN_PRO и PRO_STATS. Заменить на явный environment
+[] - routers/form.py пишет через print() имя, email и текст сообщения в логи контейнера.
+     Это персональные данные в открытом виде — после принятия политики 152-ФЗ так нельзя.
+     Убрать print, оставить logger с обезличенными сообщениями
+
 ******************Приоритет: Средний*******************************************
 [] - 
 [] - 
 [] - 
 
 
+--- инфраструктура, по итогам ревью docker 2026-09-10 ---
+[] - .dockerignore не применяется ни к одной сборке: он в корне, а контексты сборки —
+     ./easysochi-site, ./easysochi-backend, ./nginx. Docker читает .dockerignore из корня
+     контекста. Для сайта критично: в образ утягиваются public/, resources/ и
+     .hugo_build.lock с машины сборки, устаревший кеш resources/ может испортить сборку
+[] - goaccess_pro стартует раньше, чем nginx создаст лог, и уходит в цикл рестартов.
+     Добавить depends_on на nginx
+[] - Hugo качается wget-ом при каждой сборке: 40+ МБ с GitHub, без сверки контрольной
+     суммы, плюс целый stage на ubuntu:22.04 ради wget. Перейти на готовый образ
+     hugomods/hugo:exts-0.146.0 — быстрее, меньше, версия зафиксирована
+[] - тома с driver_opts type=none/o=bind — это bind-mount, переодетый в volume. Ловушка:
+     при смене device: докер не пересоздаёт том, пока не сделать docker volume rm, и
+     изменения молча не применяются. Заменить на обычные bind-mount
+
 ********************Приоритет: Низкий*******************************************
 [] - 
 [] - 
 
+
+--- инфраструктура, по итогам ревью docker 2026-09-10 ---
+[] - apk add --no-cache gettext в nginx/Dockerfile лишний: envsubst есть в образе всегда,
+     им пользуется сам entrypoint 20-envsubst-on-templates.sh
+[] - из базового образа остаётся /etc/nginx/conf.d/default.conf и подключается через
+     include conf.d/*.conf — мёртвый server-блок на 80. Удалить в Dockerfile
+[] - в easysochi-site/Dockerfile "as builder" строчными — BuildKit ругается FromAsCasing
+[] - user: "1000:1000" в compose дублирует USER easysochipro из Dockerfile,
+     два источника правды для одного uid
+[] - образы без явных имён и тегов, откатиться на предыдущую сборку нельзя.
+     Задать image: easysochi/<сервис>:${TAG:-latest}
+[] - docker compose падает без .env с "env file not found" — дописать в README, что это
+     обязательный шаг до up, рядом с предупреждением про .htpasswd
+[] - restart вразнобой: always у db и goaccess, unless-stopped у остальных

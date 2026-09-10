@@ -53,6 +53,19 @@ htpasswd -c .htpasswd <username>
 docker compose up -d --build
 ```
 
+### 5. Ротация логов nginx
+Логи пишутся на HDD и читаются GoAccess, поэтому ротация настраивается на хосте,
+а не внутри контейнера. Конфиг лежит в репозитории:
+
+```bash
+sudo cp deploy/logrotate/easysochi_pro /etc/logrotate.d/easysochi_pro
+sudo logrotate -d /etc/logrotate.d/easysochi_pro
+```
+
+Вторая команда прогоняет logrotate вхолостую и показывает, что бы он сделал,
+ничего не меняя. GoAccess запущен с `--persist/--restore`, поэтому обрезание
+лога не стирает накопленную статистику.
+
 ## 📂 Структура проекта
 
 - `/easysochi-site` — фронтенд Hugo
