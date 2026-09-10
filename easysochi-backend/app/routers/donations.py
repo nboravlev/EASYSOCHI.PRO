@@ -1,5 +1,6 @@
 import logging
 from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, desc, select
 
@@ -10,7 +11,7 @@ from app.services.robokassa_service import RobokassaService
 from app.services.notification_service import NotificationService
 from app.schemas.payment_schemas import (
     DonationRequest, DonationResponse, 
-    StatsResponse, DonorInfo, WebhookResponse
+    StatsResponse, DonorInfo
 )
 from app.core.config import settings
 
@@ -77,37 +78,47 @@ async def create_donation(
         raise HTTPException(status_code=500, detail="Payment creation failed")
 
 
-@router.post("/webhook", response_model=WebhookResponse)
+@router.post("/webhook", response_class=PlainTextResponse)
 async def payment_webhook(
     request: Request, 
     db: AsyncSession = Depends(get_async_session)
 ):
     """
-    🔄 ИЗМЕНЕНО: Вебхук от Robokassa
-    
-    Принимает уведомления об успешных платежах от Robokassa.
-    IP проверяется на уровне Nginx (см. конфиг).
+    Вебхук от Robokassa (ResultURL).
+
+    Тело ответа должно быть ровно "OK<номер счёта>" открытым текстом — так
+    описан ResultURL в документации Robokassa. Любой другой ответ, включая
+    JSON с той же строкой внутри поля, она считает неуспехом и повторяет
+    уведомление, пока не получит ожидаемый текст.
+
+    IP проверяется на уровне Nginx (geo $is_payment_service), подпись —
+    в RobokassaService по паролю #2.
     """
     logger.info("=== Входящий вебхук от Robokassa ===")
     
     try:
-        # 🔄 Robokassa отправляет form-data, а не JSON
+        # Robokassa отправляет form-data, а не JSON
         form_data = await request.form()
         data = dict(form_data)
         
         logger.info(f"Webhook data: {data}")
         
-        # 🔄 Обработка через сервис
         result = await payment_service.process_webhook(data, db)
         
         if "error" in result:
-            return WebhookResponse(status="error", detail=result["error"])
+            # Неверная подпись или нехватка параметров: подтверждать нечего.
+            # 400 не даёт подделанному уведомлению выглядеть принятым и
+            # отличим в логах от нормальной обработки.
+            logger.warning(f"Webhook rejected: {result['error']}")
+            return PlainTextResponse(result["error"], status_code=400)
         
-        return WebhookResponse(status="ok", detail=result.get("detail"))
+        return PlainTextResponse(result["detail"])
         
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return WebhookResponse(status="error", detail=str(e))
+    except Exception:
+        # 500 — сигнал Robokassa повторить уведомление позже: ошибка на нашей
+        # стороне, платёж при этом мог быть успешным
+        logger.exception("Webhook error")
+        return PlainTextResponse("Internal error", status_code=500)
 
 
 @router.get("/stats", response_model=StatsResponse)
