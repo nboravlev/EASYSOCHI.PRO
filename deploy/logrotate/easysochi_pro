@@ -1,0 +1,29 @@
+# Ротация логов внутреннего nginx.
+#
+# Логи лежат на HDD (том easysochipro_logs → /data/easysochi_pro/logs) и
+# читаются GoAccess. Без ротации easysochi.pro_access.log растёт бесконечно —
+# 2026-02-08 его уже приходилось чистить руками.
+#
+# Установка на сервере:
+#   sudo cp deploy/logrotate/easysochi_pro /etc/logrotate.d/easysochi_pro
+#   sudo logrotate -d /etc/logrotate.d/easysochi_pro    # проверка вхолостую
+#
+# GoAccess запущен с --persist/--restore и хранит агрегаты в отдельном томе,
+# поэтому обрезание лога больше не стирает накопленную статистику.
+
+/data/easysochi_pro/logs/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # 101:101 — uid/gid пользователя nginx, как и при подготовке папок в README
+    create 0640 101 101
+    sharedscripts
+    postrotate
+        # Без reopen nginx продолжит писать в переименованный inode,
+        # и новый файл лога останется пустым
+        docker exec easysochi_nginx nginx -s reopen >/dev/null 2>&1 || true
+    endscript
+}

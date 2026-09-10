@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
 from app.routers import form, donations
-from app.db.db_async import engine, Base
 
 app = FastAPI(redirect_slashes=False)
 
@@ -15,11 +14,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 @app.get("/health")
 async def health():
