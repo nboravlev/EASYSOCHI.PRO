@@ -23,8 +23,3 @@ class StatsResponse(BaseModel):
     raised: int
     goal: int
     donors: List[DonorInfo]
-
-class WebhookResponse(BaseModel):
-    """Ответ вебхука"""
-    status: str
-    detail: Optional[str] = None

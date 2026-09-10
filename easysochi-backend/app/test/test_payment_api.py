@@ -237,17 +237,17 @@ def test_api():
                 )
                 
                 if r.status_code == 200:
-                    response_data = r.json()
-                    if response_data.get("status") == "ok" or "OK" in str(response_data.get("detail", "")):
-                        print_success(f"  Вебхук обработан: {response_data}")
+                    # Robokassa ждёт ровно "OK<InvId>" открытым текстом
+                    expected = f"OK{inv_id}"
+                    if r.text.strip() == expected:
+                        print_success(f"  Вебхук обработан, ответ: {r.text.strip()}")
                         results.append(True)
                     else:
-                        print_error(f"  Webhook response error: {response_data}")
+                        print_error(f"  Ожидался ответ {expected!r}, получен {r.text!r}")
                         results.append(False)
                 else:
                     print_error(f"  Webhook failed with status {r.status_code}")
                     results.append(False)
-                    
             except Exception as e:
                 print_error(f"  Webhook error: {e}")
                 results.append(False)
@@ -268,17 +268,14 @@ def test_api():
                     headers={"Content-Type": "application/x-www-form-urlencoded"}
                 )
                 
-                if r.status_code == 200:
-                    response_data = r.json()
-                    if response_data.get("status") == "error" or "Invalid signature" in str(response_data):
-                        print_success("  Неверная подпись отклонена")
-                        results.append(True)
-                    else:
-                        print_warning(f"  Неверная подпись принята? {response_data}")
-                        results.append(False)
-                else:
-                    print_success(f"  Ожидаемая ошибка: статус {r.status_code}")
+                # Подделанное уведомление не должно выглядеть принятым:
+                # ожидаем 400 и отсутствие подтверждающего "OK<InvId>"
+                if r.status_code == 400 and not r.text.strip().startswith("OK"):
+                    print_success(f"  Неверная подпись отклонена: {r.status_code} {r.text.strip()!r}")
                     results.append(True)
+                else:
+                    print_error(f"  Неверная подпись принята? {r.status_code} {r.text!r}")
+                    results.append(False)
             except Exception as e:
                 print_error(f"  Error: {e}")
                 results.append(False)
