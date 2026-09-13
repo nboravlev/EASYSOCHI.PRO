@@ -1,9 +1,20 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+import os
+from typing import List
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.db_async import get_async_session
 from app.db.models.contact_form import ContactForm
-import httpx, os, logging
+from app.schemas.form_schemas import (
+    ContactFormAccepted,
+    ContactFormCreate,
+    ContactTopic,
+    ContactType,
+)
 
 router = APIRouter(tags=["form"])
 
@@ -12,43 +23,78 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 logger = logging.getLogger(__name__)
 
-@router.post("/")
-async def receive_form(request: Request, db: AsyncSession = Depends(get_async_session)):
-    # Получаем данные из запроса
-    data = await request.json()
+# Значки в уведомлении, чтобы способ связи считывался с первого взгляда.
+CONTACT_ICONS = {
+    ContactType.email: "📧",
+    ContactType.phone: "📞",
+    ContactType.telegram: "✈️",
+}
 
-    name = data.get("name")
-    email = data.get("email")
-    message = data.get("message")
 
-    if not name or not email or not message:
-        raise HTTPException(status_code=400, detail="Missing required fields")
+@router.get("/topics", response_model=List[str])
+async def get_topics():
+    """Список тем обращения для выпадающего списка на фронте.
 
-    form_entry = ContactForm(name=name, email=email, message=message)
+    Отдаётся из enum, справочника в базе нет — см. комментарий к ContactTopic.
+    """
+    return [topic.value for topic in ContactTopic]
+
+
+@router.post("/", response_model=ContactFormAccepted)
+async def receive_form(
+    form_data: ContactFormCreate,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Приём заявки с формы обратной связи.
+
+    Валидацию целиком делает ContactFormCreate, поэтому невалидный ввод
+    возвращает 422 с описанием проблемного поля, а не 400 без подробностей
+    и не 500 из-за упёршегося в длину колонки текста.
+    """
+    entry = ContactForm(
+        name=form_data.name,
+        contact_type=form_data.contact_type.value,
+        contact_value=form_data.contact_value,
+        topic=form_data.topic.value,
+        source=form_data.source,
+        message=form_data.message,
+    )
 
     try:
-        db.add(form_entry)
+        db.add(entry)
         await db.commit()
-        await db.refresh(form_entry)
-        logger.info("Contact form saved, id=%s", form_entry.id)
-
-    except SQLAlchemyError as e:
+        await db.refresh(entry)
+    except SQLAlchemyError:
         await db.rollback()
-        logger.exception("Failed to save form to DB")
+        logger.exception("Failed to save contact form")
         raise HTTPException(status_code=500, detail="DB error")
 
-    # Отправка уведомления в Telegram
-    text = f"📩 Новая заявка:\nИмя: {name}\nEmail: {email}\nСообщение:\n{message}"
+    # В лог — только идентификатор и тема. Имя, контакт и текст сообщения
+    # это персональные данные, в docker logs им не место.
+    logger.info("Contact form saved, id=%s topic=%s", entry.id, entry.topic)
+
+    icon = CONTACT_ICONS.get(form_data.contact_type, "👤")
+    text = (
+        f"📩 Новая заявка\n\n"
+        f"👤 Имя: {form_data.name}\n"
+        f"{icon} {form_data.contact_type.value.capitalize()}: {form_data.contact_value}\n"
+        f"📂 Тема: {form_data.topic.value}\n"
+        f"🔗 Источник: {form_data.source or 'не указан'}\n"
+        f"📝 Сообщение:\n{form_data.message}"
+    )
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": text}
+                json={"chat_id": CHAT_ID, "text": text},
             )
-            # Тело ответа Telegram содержит эхо отправленного сообщения,
-            # то есть имя, email и текст заявки — логируем только статус
-            logger.info("Telegram notification sent, status=%s", response.status_code)
-    except httpx.HTTPError as e:
-        logger.warning(f"Telegram notification failed: {e}")
+        # Тело ответа Telegram содержит эхо отправленного сообщения,
+        # то есть саму заявку — логируем только статус.
+        logger.info("Telegram notification sent, status=%s", response.status_code)
+    except httpx.HTTPError as exc:
+        # Заявка уже в базе, так что неудача уведомления не повод
+        # возвращать ошибку отправителю.
+        logger.warning("Telegram notification failed: %s", exc)
 
-    return {"status": "ok"}
+    return ContactFormAccepted(id=entry.id)

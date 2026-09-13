@@ -1,0 +1,224 @@
+{{/*
+  Форма обратной связи.
+
+  Вставляется на любую страницу как {{< contact_form >}}. Базовое оформление
+  поля-кнопки живёт в /css/contact.css и подключается страницей отдельно
+  (см. content/contact/_index.md). Здесь только стили новых элементов —
+  переключателя способа связи и списка тем, — чтобы шорткод оставался
+  самодостаточным.
+
+  Темы обращения не захардкожены: список приходит из /api/v2/form/topics,
+  который отдаёт значения enum ContactTopic. Единственный источник правды —
+  бэкенд.
+*/}}
+
+<style>
+.contact-form-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 14px;
+}
+
+.contact-form-tab-btn {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.contact-form-tab-btn:hover { opacity: 0.8; }
+
+.contact-form-tab-btn.active {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+.contact-form-tab-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* select не покрыт правилами contact.css, где перечислены только
+   input и textarea, — задаём его здесь в той же манере. */
+#contact-form select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+#contact-form select option {
+  color: initial;
+}
+
+.contact-form-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: none;
+}
+
+.contact-form-status.ok {
+  display: block;
+  border: 1px solid rgba(60, 160, 90, 0.5);
+}
+
+.contact-form-status.error {
+  display: block;
+  border: 1px solid rgba(200, 70, 70, 0.5);
+}
+</style>
+
+<form id="contact-form" style="max-width: 500px; margin: auto;">
+  <label for="name">Имя:</label>
+  <input type="text" id="name" name="name" required autocomplete="name" placeholder="Ваше имя">
+
+  <label>Как с вами связаться:</label>
+  <div class="contact-form-tabs">
+    {{- range $type := slice "email" "phone" "telegram" -}}
+      {{- $img := resources.Get (printf "images/social/%s.png" $type) -}}
+      <button type="button"
+              class="contact-form-tab-btn{{ if eq $type "email" }} active{{ end }}"
+              data-type="{{ $type }}"
+              title="{{ $type | title }}">
+        {{- with $img -}}
+          <img src="{{ .RelPermalink }}" alt="{{ $type }}">
+        {{- else -}}
+          <span>{{ $type | title }}</span>
+        {{- end -}}
+      </button>
+    {{- end -}}
+  </div>
+
+  <input type="hidden" name="contact_type" id="contact_type" value="email">
+  <input type="email" id="contact_value" name="contact_value" required
+         autocomplete="email" placeholder="example@mail.com">
+
+  <label for="topic">Тема обращения:</label>
+  <select id="topic" name="topic" required>
+    <option value="">Загрузка…</option>
+  </select>
+
+  <label for="message">Сообщение:</label>
+  <textarea id="message" name="message" rows="5" required
+            placeholder="Расскажите, с чем нужна помощь"></textarea>
+
+  <p style="font-size: 0.9rem; color:#555;">
+    Нажимая на кнопку <strong>«Отправить»</strong>, вы соглашаетесь на обработку
+    персональных данных в соответствии с
+    <a href="/privacy-policy/" target="_blank">Политикой конфиденциальности</a>.
+  </p>
+
+  <input type="hidden" name="source" value="{{ .Page.RelPermalink }}">
+  <button type="submit">Отправить</button>
+
+  <div class="contact-form-status" id="contact-form-status"></div>
+</form>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("contact-form");
+  const contactInput = document.getElementById("contact_value");
+  const contactTypeHidden = document.getElementById("contact_type");
+  const topicSelect = document.getElementById("topic");
+  const statusBox = document.getElementById("contact-form-status");
+  const tabBtns = document.querySelectorAll(".contact-form-tab-btn");
+
+  // Код страны фиксированный. Определять его по IP через внешний сервис мы
+  // намеренно не стали: это передача адреса посетителя третьей стороне,
+  // не описанная в политике обработки данных, да ещё и на критическом пути
+  // инициализации формы.
+  const COUNTRY_CODE = "+7";
+
+  const showStatus = (message, kind) => {
+    statusBox.textContent = message;
+    statusBox.className = "contact-form-status " + kind;
+  };
+
+  // --- Темы обращения ---
+  fetch("/api/v2/form/topics")
+    .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    .then((topics) => {
+      topicSelect.innerHTML = topics
+        .map((t) => '<option value="' + t + '">' + t + "</option>")
+        .join("");
+    })
+    .catch((err) => {
+      console.error("Не удалось загрузить темы обращения:", err);
+      topicSelect.innerHTML = '<option value="Другое">Другое</option>';
+    });
+
+  // --- Переключение способа связи ---
+  const contactModes = {
+    email: { type: "email", placeholder: "example@mail.com", prefill: "", autocomplete: "email" },
+    phone: { type: "tel", placeholder: COUNTRY_CODE + " 900 000-00-00", prefill: COUNTRY_CODE + " ", autocomplete: "tel" },
+    telegram: { type: "text", placeholder: "@username", prefill: "@", autocomplete: "off" },
+  };
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const mode = contactModes[btn.dataset.type];
+      contactTypeHidden.value = btn.dataset.type;
+      contactInput.type = mode.type;
+      contactInput.placeholder = mode.placeholder;
+      contactInput.value = mode.prefill;
+      contactInput.setAttribute("autocomplete", mode.autocomplete);
+      contactInput.focus();
+    });
+  });
+
+  // --- Отправка ---
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+
+    try {
+      const response = await fetch("/api/v2/form/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (response.ok) {
+        if (window.sendMetrikaGoal) {
+          window.sendMetrikaGoal("form_success");
+        }
+        showStatus("Спасибо! Заявка отправлена, скоро свяжемся.", "ok");
+        form.reset();
+        tabBtns[0].click();
+        return;
+      }
+
+      // 422 от pydantic приходит списком: detail[0].msg содержит причину,
+      // например «Некорректный формат email адреса». Показываем её человеку,
+      // а весь ответ отправляем в консоль для разбора.
+      const payload = await response.json().catch(() => null);
+      console.error("Форма отклонена:", response.status, payload);
+
+      let reason = "Проверьте заполнение полей.";
+      if (payload && Array.isArray(payload.detail) && payload.detail.length) {
+        reason = String(payload.detail[0].msg || reason).replace(/^Value error,\s*/, "");
+      }
+      showStatus("Не отправлено. " + reason, "error");
+    } catch (err) {
+      console.error("Сбой отправки формы:", err);
+      showStatus("Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз.", "error");
+    }
+  });
+});
+</script>
