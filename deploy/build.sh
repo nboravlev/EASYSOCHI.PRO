@@ -32,6 +32,9 @@ API_CONTAINER=easysochi_contact_api
 HEALTHCHECKED="postgres_db_easysochi easysochi_site easysochi_contact_api"
 HEALTH_TIMEOUT=180
 
+# Сколько последних тегов каждого нашего образа оставлять после сборки.
+KEEP_IMAGES=3
+
 SKIP_TESTS=0
 NO_CACHE=0
 TAG=""
@@ -47,6 +50,8 @@ usage() {
   printf "  --tag <тег>    тег образов (по умолчанию — короткий хеш коммита)\n"
   printf "  --skip-tests   не прогонять проверки API после запуска\n"
   printf "  --no-cache     пересобрать образы без использования кеша\n"
+  printf "  --keep <N>     сколько последних тегов своих образов оставлять (по умолчанию 3)
+"
   printf "  -h, --help     показать эту справку\n\n"
   printf "Откат на предыдущую сборку (образ должен остаться на диске):\n"
   printf "  cd deploy && TAG=<тег> docker compose up -d\n"
@@ -66,6 +71,17 @@ while [ "$#" -gt 0 ]; do
     --no-cache)
       NO_CACHE=1
       shift
+      ;;
+    --keep)
+      if [ -z "${2:-}" ]; then
+        printf "Опция --keep требует значения.
+
+" >&2
+        usage >&2
+        exit 1
+      fi
+      KEEP_IMAGES=$2
+      shift 2
       ;;
     --tag)
       if [ -z "${2:-}" ]; then
@@ -240,6 +256,42 @@ if [ "$TAG" != "latest" ]; then
   done
   ok "образы дополнительно помечены как :latest"
 fi
+
+# ----------------------------------------------------- уборка старых образов
+
+# Тегирование по хешу коммита (PR #11) дало откат, но и накопление: каждая
+# сборка добавляет по образу на сервис. За десяток сборок это три десятка
+# образов по 74-224 МБ. Держим последние KEEP_IMAGES тегов, остальные сносим.
+#
+# Трогаем ТОЛЬКО свои репозитории: сервер общий, на нём живут проекты другого
+# разработчика, и docker image prune тут запускать нельзя.
+prune_old_images() {
+  for IMAGE in easysochi/site easysochi/contact-api easysochi/nginx; do
+    # Сортируем по дате создания, новые сверху. latest исключаем: это второй
+    # тег на уже существующий образ, удалять его нельзя — на него смотрит
+    # обычный docker compose up -d без переменной TAG.
+    OLD_TAGS=$(
+      docker images "$IMAGE" --format "{{.CreatedAt}}	{{.Tag}}" 2>/dev/null |
+        awk -F'\t' '$2 != "latest" && $2 != "<none>"' |
+        sort -r |
+        awk -v keep="$KEEP_IMAGES" 'NR > keep' |
+        cut -f2
+    )
+
+    for OLD_TAG in $OLD_TAGS; do
+      # Без -f: если образ занят контейнером, docker откажется его удалять,
+      # и это правильное поведение — значит он кому-то ещё нужен.
+      if docker rmi "$IMAGE:$OLD_TAG" >/dev/null 2>&1; then
+        ok "удалён старый образ $IMAGE:$OLD_TAG"
+      else
+        warn "не удалось удалить $IMAGE:$OLD_TAG — вероятно, используется контейнером"
+      fi
+    done
+  done
+}
+
+step "Уборка старых образов (оставляем последние $KEEP_IMAGES)"
+prune_old_images
 
 # ----------------------------------------------------------------- запуск
 
