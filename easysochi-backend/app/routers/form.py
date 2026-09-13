@@ -3,7 +3,7 @@ import os
 from typing import List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,47 @@ CONTACT_ICONS = {
 }
 
 
+async def notify_telegram(text: str) -> None:
+    """Уведомление о заявке. Запускается фоном, уже после ответа клиенту.
+
+    Раньше отправка шла внутри обработчика, и при недоступном Telegram ответ
+    формы задерживался на весь таймаут. Посетитель видел, что «ничего не
+    происходит», жал кнопку ещё раз — в базе появлялись дубли заявки.
+    Заявка уже сохранена, так что доставка уведомления не должна влиять
+    ни на ответ, ни на его скорость.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": text},
+            )
+
+        if response.status_code == 200:
+            # Тело успешного ответа содержит эхо отправленного сообщения,
+            # то есть саму заявку — его не логируем.
+            logger.info("Telegram notification sent")
+            return
+
+        # А вот тело ОШИБКИ персональных данных не содержит: там
+        # {"ok":false,"error_code":...,"description":"..."} — и без описания
+        # причину не понять.
+        description = ""
+        try:
+            description = response.json().get("description", "")
+        except ValueError:
+            pass
+        logger.error(
+            "Telegram rejected notification: status=%s description=%s",
+            response.status_code,
+            description,
+        )
+    except Exception as exc:
+        # repr, а не str: у таймаутов httpx пустое строковое представление,
+        # и в логах оставалось «Telegram notification failed:» без причины.
+        logger.error("Telegram notification failed: %r", exc)
+
+
 @router.get("/topics", response_model=List[str])
 async def get_topics():
     """Список тем обращения для выпадающего списка на фронте.
@@ -43,6 +84,7 @@ async def get_topics():
 @router.post("/", response_model=ContactFormAccepted)
 async def receive_form(
     form_data: ContactFormCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_session),
 ):
     """Приём заявки с формы обратной связи.
@@ -82,19 +124,8 @@ async def receive_form(
         f"🔗 Источник: {form_data.source or 'не указан'}\n"
         f"📝 Сообщение:\n{form_data.message}"
     )
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(
-                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": text},
-            )
-        # Тело ответа Telegram содержит эхо отправленного сообщения,
-        # то есть саму заявку — логируем только статус.
-        logger.info("Telegram notification sent, status=%s", response.status_code)
-    except httpx.HTTPError as exc:
-        # Заявка уже в базе, так что неудача уведомления не повод
-        # возвращать ошибку отправителю.
-        logger.warning("Telegram notification failed: %s", exc)
+    # Уведомление уходит фоном: ответ клиенту отдаётся сразу после коммита,
+    # не дожидаясь Telegram.
+    background_tasks.add_task(notify_telegram, text)
 
     return ContactFormAccepted(id=entry.id)
