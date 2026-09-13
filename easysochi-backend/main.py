@@ -9,7 +9,9 @@ from app.routers import form, donations
 # Логи приложения: без явной настройки корневого логгера сообщения уровня
 # INFO из наших модулей никуда не попадают — у root остаётся уровень WARNING.
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
+    # "or" вместо второго аргумента getenv: переменная может прийти заданной,
+    # но пустой, и тогда basicConfig упал бы с ValueError: Unknown level.
+    level=os.getenv("LOG_LEVEL") or "INFO",
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
