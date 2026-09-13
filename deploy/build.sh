@@ -2,8 +2,13 @@
 #
 # Сборка, запуск и проверка стека EASYSOCHI.PRO.
 #
+# Живёт в deploy/ рядом с docker-compose.yml: вся конфигурация развёртывания
+# собрана в одном каталоге, а Dockerfile каждого сервиса лежит в его
+# собственном <сервис>/docker/.
+#
 # Что делает по шагам:
-#   1. проверяет, что демон Docker доступен, а рядом лежат .env и .htpasswd
+#   1. проверяет, что демон Docker доступен, а рядом лежат deploy/.env
+#      и deploy/.htpasswd
 #   2. вычисляет тег образов: короткий хеш текущего коммита, плюс суффикс
 #      -dirty, если в рабочем дереве есть незакоммиченные правки
 #   3. собирает образы с этим тегом и дополнительно метит их как :latest
@@ -44,7 +49,7 @@ usage() {
   printf "  --no-cache     пересобрать образы без использования кеша\n"
   printf "  -h, --help     показать эту справку\n\n"
   printf "Откат на предыдущую сборку (образ должен остаться на диске):\n"
-  printf "  TAG=<тег> docker compose up -d\n"
+  printf "  cd deploy && TAG=<тег> docker compose up -d\n"
   printf "  docker images easysochi/contact-api   — посмотреть доступные теги\n"
 }
 
@@ -107,7 +112,7 @@ dump_diagnostics() {
   printf "\n%s=== Диагностика ===%s\n" "$RED" "$RESET"
 
   printf "\n--- docker compose ps ---\n"
-  (cd "$ROOT_DIR" && docker compose ps) || true
+  (cd "$SCRIPT_DIR" && docker compose ps) || true
 
   for CONTAINER in $HEALTHCHECKED easysochi_nginx; do
     STATUS=$(docker inspect -f "{{.State.Status}}" "$CONTAINER" 2>/dev/null || echo "отсутствует")
@@ -148,17 +153,28 @@ ok "демон Docker доступен"
 
 # compose не предупреждает об отсутствии .env, а жёстко падает с
 # "env file not found", поэтому проверяем заранее и с понятным сообщением.
-if [ ! -f "$ROOT_DIR/.env" ]; then
-  fail "нет файла .env в $ROOT_DIR"
-  printf "  Создайте его из шаблона: cp .env.example .env\n" >&2
+# Файл ищется рядом с compose-файлом, то есть в deploy/.
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+  fail "нет файла .env в $SCRIPT_DIR"
+  if [ -f "$ROOT_DIR/.env" ]; then
+    printf "  Похоже, он остался в корне проекта после переезда конфигурации в deploy/.\n" >&2
+    printf "  Перенесите: mv %s/.env %s/.env\n" "$ROOT_DIR" "$SCRIPT_DIR" >&2
+  else
+    printf "  Создайте его из шаблона: cp deploy/.env.example deploy/.env\n" >&2
+  fi
   exit 1
 fi
 ok ".env на месте"
 
-if [ ! -f "$ROOT_DIR/.htpasswd" ]; then
-  fail "нет файла .htpasswd в $ROOT_DIR"
-  printf "  Без него Docker создаст на месте bind-mount директорию и nginx не поднимется.\n" >&2
-  printf "  Создайте его: htpasswd -c .htpasswd <имя_пользователя>\n" >&2
+if [ ! -f "$SCRIPT_DIR/.htpasswd" ]; then
+  fail "нет файла .htpasswd в $SCRIPT_DIR"
+  if [ -f "$ROOT_DIR/.htpasswd" ]; then
+    printf "  Похоже, он остался в корне проекта после переезда конфигурации в deploy/.\n" >&2
+    printf "  Перенесите: mv %s/.htpasswd %s/.htpasswd\n" "$ROOT_DIR" "$SCRIPT_DIR" >&2
+  else
+    printf "  Без него Docker создаст на месте bind-mount директорию и nginx не поднимется.\n" >&2
+    printf "  Создайте его: htpasswd -c deploy/.htpasswd <имя_пользователя>\n" >&2
+  fi
   exit 1
 fi
 ok ".htpasswd на месте"
@@ -191,9 +207,9 @@ trap on_exit EXIT
 step "Сборка образов"
 
 if [ "$NO_CACHE" -eq 1 ]; then
-  (cd "$ROOT_DIR" && docker compose build --no-cache)
+  (cd "$SCRIPT_DIR" && docker compose build --no-cache)
 else
-  (cd "$ROOT_DIR" && docker compose build)
+  (cd "$SCRIPT_DIR" && docker compose build)
 fi
 
 # Дополнительно метим как :latest, чтобы обычный docker compose up -d без
@@ -208,7 +224,7 @@ fi
 # ----------------------------------------------------------------- запуск
 
 step "Запуск стека"
-(cd "$ROOT_DIR" && docker compose up -d)
+(cd "$SCRIPT_DIR" && docker compose up -d)
 
 # ----------------------------------------------------------------- ожидание
 
@@ -269,5 +285,5 @@ fi
 step "Готово"
 printf "  тег сборки:      %s\n" "$TAG"
 printf "  образы:          easysochi/site, easysochi/contact-api, easysochi/nginx\n"
-printf "  откат на неё:    TAG=%s docker compose up -d\n" "$TAG"
+printf "  откат на неё:    cd deploy && TAG=%s docker compose up -d\n" "$TAG"
 printf "  доступные теги:  docker images easysochi/contact-api\n"
