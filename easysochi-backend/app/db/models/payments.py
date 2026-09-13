@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Enum, Integer, Boolean, Text, JSON
+from sqlalchemy import String, Enum, Integer, Boolean, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy import ForeignKey
@@ -18,12 +18,23 @@ class PaymentStatus(str, enum.Enum):
 class Payment(Base):
     __tablename__ = "payments"
 
+    # Идентификатор платежа уникален только в пределах своей платёжной системы:
+    # InvId у Robokassa — 32-битное число, id у ЮKassa — UUID. Уникальность
+    # держим по паре, иначе при смене провайдера возможны коллизии.
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_payment_id", name="uq_payments_provider_payment_id"),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
 
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
-    # данные ЮKassa
-    yk_payment_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    # Платёжная система, создавшая платёж: "robokassa" или "yookassa".
+    # Заполняется сервисом из PaymentService.provider, см. app/services.
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # Идентификатор платежа на стороне провайдера (InvId у Robokassa, id у ЮKassa)
+    provider_payment_id: Mapped[str] = mapped_column(String(100), nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)  # в копейках
     currency: Mapped[str] = mapped_column(String(10), default="RUB")
     description: Mapped[str | None] = mapped_column(Text)
