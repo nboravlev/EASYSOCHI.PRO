@@ -1,22 +1,25 @@
-# Build stage
-FROM ubuntu:22.04 as builder
-
-WORKDIR /tmp
-
-# Download and extract Hugo
-RUN apt-get update && apt-get install -y wget tar gzip && \
-    wget -q https://github.com/gohugoio/hugo/releases/download/v0.146.0/hugo_extended_0.146.0_linux-amd64.tar.gz && \
-    tar -xzf hugo_extended_0.146.0_linux-amd64.tar.gz && \
-    mv /tmp/hugo /usr/local/bin/ && \
-    chmod +x /usr/local/bin/hugo && \
-    /usr/local/bin/hugo version
+# Сборка сайта
+#
+# Готовый образ вместо ubuntu:22.04 + wget: раньше каждая сборка тянула с
+# GitHub 40+ МБ архива Hugo, без сверки контрольной суммы, и ломалась, если
+# GitHub недоступен. Версия теперь зафиксирована тегом образа.
+#
+# base — минимальный вариант hugomods: только Hugo, без Node, Go и Git,
+# которые проекту не нужны (модули Hugo не используются, enableGitInfo не
+# задан, тема PaperMod лежит каталогом в themes/).
+#
+# Редакция именно extended — у hugomods это теги БЕЗ префикса std. Прежний
+# Dockerfile качал hugo_extended, и менять редакцию заодно с переездом на
+# готовый образ незачем: PaperMod проверяет hugo.IsExtended и добавляет webp
+# в список обрабатываемых форматов обложек.
+FROM hugomods/hugo:base-0.146.0 AS builder
 
 WORKDIR /src
 
 COPY . .
 
 # Build static site
-RUN /usr/local/bin/hugo --minify
+RUN hugo --minify
 
 # Production stage
 FROM nginx:alpine
