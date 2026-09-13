@@ -1,12 +1,60 @@
 #!/usr/bin/env python3
-"""
-Установка pytest прямо в контейнер
+"""Проверка API easysochi.pro.
 
-docker compose exec contact_api pip install pytest
+Это ОБЫЧНЫЙ СКРИПТ, а не набор для pytest. Имена файла и функций намеренно
+не начинаются с test_, чтобы pytest их не подбирал: скрипт завершается через
+sys.exit(), а pytest считает SystemExit провалом теста даже при нулевом коде,
+и его вердикт в таком случае не несёт никакой информации.
 
-Тестовый скрипт для проверки API платежей Robokassa
+Зависимостей сверх боевых нет — используется только httpx, который и так
+входит в requirements.txt. Ставить pytest в контейнер не нужно.
 
-Запуск: docker compose exec contact_api python -m pytest app/test/test_payment_api.py -v
+ЧТО ПРОВЕРЯЕТСЯ
+  1. GET  /api/v2/donations/stats    — статистика отдаёт raised, goal, donors
+  2. POST /api/v2/donations/create   — создание платежа:
+       2.1 анонимный, 100 ₽
+       2.2 с пользователем, 500 ₽ (заодно создаётся запись в users)
+       2.3 минимальная сумма 50 ₽
+       2.4 сумма 10 ₽ отклоняется валидацией (ge=50)
+  3. POST /api/v2/donations/webhook  — приём уведомления об оплате:
+       3.1 корректная подпись: ответ должен быть ровно "OK<InvId>"
+           открытым текстом, как требует ResultURL Robokassa
+       3.2 неверная подпись: ответ 400 и без подтверждающего "OK"
+  4. POST /api/v2/form/              — валидация формы обратной связи:
+       4.1 пустые данные отклоняются
+       4.2 неверный формат отклоняется
+  5. Время ответа /donations/stats
+
+ЧЕГО СКРИПТ НЕ ПРОВЕРЯЕТ
+  Запросы идут на localhost:8000 изнутри контейнера, минуя nginx. Значит
+  geo-фильтр вебхуков ($is_payment_service) и подмена реального IP клиента
+  (real_ip) не задействованы — их проверяют только настоящие уведомления
+  от платёжной системы.
+
+  Тесты 2.1-2.3 создают НАСТОЯЩИЕ записи в таблице payments со статусом
+  pending. На публичный счётчик они не влияют (/stats считает только
+  succeeded), но при каждом прогоне таблица прирастает.
+
+ЗАПУСК
+  Обычно скрипт запускается сам, последним шагом ./scripts/build.sh.
+  Отдельно, не копируя файл в контейнер:
+
+      docker exec -i easysochi_contact_api python3 - \
+          < easysochi-backend/app/test/check_payment_api.py
+
+  Ручная проверка вебхука реальными данными — нужен файл внутри контейнера:
+
+      docker exec -it easysochi_contact_api \
+          python3 app/test/check_payment_api.py --manual-webhook
+
+КОД ВОЗВРАТА
+  0 — все проверки пройдены
+  1 — хотя бы одна не пройдена; перед выходом печатается список упавших
+      проверок с телом ответа сервера
+
+ТРЕБОВАНИЯ К ОКРУЖЕНИЮ
+  Раздел 3 работает только при заданном ROBOKASSA_PASSWORD_2 — без него
+  подпись вебхука не собрать, и проверки вебхука пропускаются.
 """
 
 import sys
@@ -23,7 +71,7 @@ from app.core.config import settings
 # Настройки для проверки
 BASE_URL = "http://localhost:8000/api/v2"  # Внутри контейнера
 
-class TestColors:
+class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'
     YELLOW = '\033[93m'
@@ -31,16 +79,22 @@ class TestColors:
     RESET = '\033[0m'
 
 def print_success(msg: str):
-    print(f"{TestColors.GREEN}✅ {msg}{TestColors.RESET}")
+    print(f"{Colors.GREEN}✅ {msg}{Colors.RESET}")
+
+# Сюда попадает каждая упавшая проверка, чтобы в конце показать их списком,
+# а не заставлять искать красные строки в длинной простыне вывода.
+FAILURES = []
+
 
 def print_error(msg: str):
-    print(f"{TestColors.RED}❌ {msg}{TestColors.RESET}")
+    FAILURES.append(msg.strip())
+    print(f"{Colors.RED}❌ {msg}{Colors.RESET}")
 
 def print_info(msg: str):
-    print(f"{TestColors.BLUE}📌 {msg}{TestColors.RESET}")
+    print(f"{Colors.BLUE}📌 {msg}{Colors.RESET}")
 
 def print_warning(msg: str):
-    print(f"{TestColors.YELLOW}⚠️ {msg}{TestColors.RESET}")
+    print(f"{Colors.YELLOW}⚠️ {msg}{Colors.RESET}")
 
 def generate_robokassa_signature(out_sum: str, inv_id: str, password: str, shp_params: dict = None) -> str:
     """Генерация подписи Robokassa (для тестов)"""
@@ -70,11 +124,27 @@ def create_mock_webhook_data(inv_id: int, out_sum: float, password: str, **shp_p
     
     return data
 
-def test_api():
-    """Основная функция тестирования"""
+def run_checks():
+    """Прогон всех проверок. Возвращать ничего не нужно — завершает процесс."""
     print_info(f"Начинаем проверку API: {BASE_URL}")
+    print_info(f"Платёжная система: {settings.PAYMENT_PROVIDER}")
     print_info(f"Robokassa Shop ID: {settings.ROBOKASSA_SHOP_ID}")
     print_info(f"Test Mode: {settings.ROBOKASSA_TEST_MODE}")
+
+    # Сначала убеждаемся, что приложение вообще отвечает. Без этой проверки
+    # неподнятый API даёт два десятка одинаковых ConnectError, и настоящая
+    # причина теряется в выводе.
+    try:
+        health = httpx.get("http://localhost:8000/health", timeout=5.0)
+        if health.status_code != 200:
+            print_error(f"/health ответил {health.status_code}, ожидался 200")
+            sys.exit(1)
+    except Exception as exc:
+        print_error(f"API не отвечает на http://localhost:8000/health: {exc}")
+        print("\nСкорее всего контейнер не поднялся. Что смотреть:")
+        print("  docker compose ps")
+        print("  docker logs easysochi_contact_api --tail 100")
+        sys.exit(1)
     
     results = []
     
@@ -101,7 +171,7 @@ def test_api():
                     print_error(f"Stats response missing fields: {data}")
                     results.append(False)
             else:
-                print_error(f"Stats failed with status {r.status_code}")
+                print_error(f"Stats failed with status {r.status_code}: {r.text[:300]}")
                 results.append(False)
         except Exception as e:
             print_error(f"Stats error: {e}")
@@ -181,7 +251,7 @@ def test_api():
                 test_data["created_payments"].append({"type": "min", "amount": 50})
                 results.append(True)
             else:
-                print_error(f"  Failed with status {r.status_code}")
+                print_error(f"  Failed with status {r.status_code}: {r.text[:300]}")
                 results.append(False)
         except Exception as e:
             print_error(f"  Error: {e}")
@@ -251,7 +321,7 @@ def test_api():
                         print_error(f"  Ожидался ответ {expected!r}, получен {r.text!r}")
                         results.append(False)
                 else:
-                    print_error(f"  Webhook failed with status {r.status_code}")
+                    print_error(f"  Webhook failed with status {r.status_code}: {r.text[:300]}")
                     results.append(False)
             except Exception as e:
                 print_error(f"  Webhook error: {e}")
@@ -350,17 +420,27 @@ def test_api():
     
     print_info(f"Результаты тестирования:")
     print(f"  Всего тестов: {total_tests}")
-    print(f"  Пройдено: {TestColors.GREEN}{passed_tests}{TestColors.RESET}")
-    print(f"  Не пройдено: {TestColors.RED}{total_tests - passed_tests}{TestColors.RESET}")
+    print(f"  Пройдено: {Colors.GREEN}{passed_tests}{Colors.RESET}")
+    print(f"  Не пройдено: {Colors.RED}{total_tests - passed_tests}{Colors.RESET}")
     
     if all(results):
-        print_success("\n🎉 Все тесты пройдены успешно!")
+        print_success("\nВсе проверки пройдены успешно!")
         sys.exit(0)
-    else:
-        print_error("\n⚠️ Некоторые тесты не пройдены!")
-        sys.exit(1)
 
-def test_webhook_manually():
+    # Упавшие проверки выводим отдельным списком: при прогоне из ./scripts/build.sh
+    # вывод длинный, и выискивать в нём красные строки глазами неудобно.
+    bar = "=" * 60
+    print(f"\n{Colors.RED}{bar}")
+    print(f"НЕ ПРОЙДЕНО — {len(FAILURES)} проверок:{Colors.RESET}")
+    for i, failure in enumerate(FAILURES, 1):
+        print(f"  {i}. {failure}")
+    print(f"{Colors.RED}{bar}{Colors.RESET}")
+    print("\nЧто смотреть дальше:")
+    print("  docker compose ps")
+    print("  docker logs easysochi_contact_api --tail 100")
+    sys.exit(1)
+
+def manual_webhook_check():
     """Отдельная функция для ручного тестирования вебхука с реальными данными"""
     print_info("\n🔧 Ручное тестирование вебхука")
     
@@ -402,6 +482,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.manual_webhook:
-        test_webhook_manually()
+        manual_webhook_check()
     else:
-        test_api()
+        run_checks()
