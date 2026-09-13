@@ -2,6 +2,8 @@
 
 Центральный узел экосистемы EasySochi. Проект объединяет фронтенд на Hugo, бэкенд на Python (FastAPI), базу данных PostgreSQL, реверс-прокси nginx и мониторинг статистики через GoAccess.
 
+Порядок работы над проектом — ветки, содержание PR, проверка на сервере перед мержем — описан в [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 🛠 Технологический стек
 - **Frontend:** Hugo (Static Site Generator)
 - **Backend:** Python (FastAPI)
@@ -72,6 +74,7 @@ sudo logrotate -d /etc/logrotate.d/easysochi_pro
 - `/easysochi-backend` — бэкенд FastAPI
 - `/nginx` — конфиг внутреннего реверс-прокси
 - `/docker-compose.yml` — описание сервисов
+- `/CONTRIBUTING.md` — порядок разработки и проверки изменений
 
 ## 🔐 Безопасность
 
