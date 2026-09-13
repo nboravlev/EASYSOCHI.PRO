@@ -266,7 +266,7 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
      при смене device: докер не пересоздаёт том, пока не сделать docker volume rm, и
      изменения молча не применяются. Заменить на обычные bind-mount
 
-[] - .env.example не соответствует коду после перехода на Robokassa: в нём остались
+[x] - .env.example не соответствует коду после перехода на Robokassa: в нём остались
      YOOKASSA_*, а ROBOKASSA_SHOP_ID / PASSWORD_1 / PASSWORD_2 / TEST_MODE отсутствуют.
      На новом сервере платежи молча не заведутся — settings подставит пустые строки
 [] - app/routers/_donations.py — старый роутер ЮKassa, нигде не импортируется.
@@ -278,10 +278,8 @@ docker exec -i easysochi_contact_api python3 -< easysochi-backend/app/test/check
 
 
 --- инфраструктура, по итогам ревью docker 2026-09-10 ---
-[] - apk add --no-cache gettext в nginx/Dockerfile лишний: envsubst есть в образе всегда,
-     им пользуется сам entrypoint 20-envsubst-on-templates.sh
-[] - из базового образа остаётся /etc/nginx/conf.d/default.conf и подключается через
-     include conf.d/*.conf — мёртвый server-блок на 80. Удалить в Dockerfile
+[] - apk add --no-cache gettext в nginx/Dockerfile лишний: envsubst есть в образе всегда, им пользуется сам entrypoint 20-envsubst-on-templates.sh
+[] - из базового образа остаётся /etc/nginx/conf.d/default.conf и подключается через include conf.d/*.conf — мёртвый server-блок на 80. Удалить в Dockerfile
 [] - в easysochi-site/Dockerfile "as builder" строчными — BuildKit ругается FromAsCasing
 [] - user: "1000:1000" в compose дублирует USER easysochipro из Dockerfile,
      два источника правды для одного uid
