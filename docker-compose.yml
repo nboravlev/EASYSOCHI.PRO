@@ -35,6 +35,10 @@ services:
 
   # --- Сайт (Frontend) ---
   easysochi-site:
+    # Тег задаётся переменной TAG, её проставляет ./scripts/build.sh
+    # (по умолчанию — короткий хеш коммита). Откат на предыдущую сборку:
+    #   TAG=<хеш> docker compose up -d
+    image: easysochi/site:${TAG:-latest}
     build:
       context: ./easysochi-site
       dockerfile: Dockerfile
@@ -53,6 +57,7 @@ services:
 
   # --- Бэкенд (API) ---
   contact_api:
+    image: easysochi/contact-api:${TAG:-latest}
     build:
       context: ./easysochi-backend
       dockerfile: Dockerfile
@@ -77,6 +82,7 @@ services:
       - easysochipro_net
         
   nginx:
+    image: easysochi/nginx:${TAG:-latest}
     build:
       context: ./nginx
       dockerfile: Dockerfile
