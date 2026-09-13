@@ -35,36 +35,37 @@ sudo chown -R 101:101 /data/easysochi_pro/stats
 
 ### 2. Подготовка переменных
 ```bash
-cp .env.example .env
+cp deploy/.env.example deploy/.env
 ```
 
 ### 3. Создание .htpasswd для stats.easysochi.pro
 
 > ⚠️ **Обязательный шаг — выполнить до `docker compose up`.**
 > Файл `.htpasswd` не хранится в репозитории (он в `.gitignore`), поэтому после
-> `git clone` его на сервере нет. В `docker-compose.yml` он монтируется как
-> `./.htpasswd:/etc/nginx/.htpasswd:ro` — если файла не существует, Docker создаст
-> на его месте **директорию**, и контейнер nginx упадёт при старте.
+> `git clone` его на сервере нет. В `deploy/docker-compose.yml` он монтируется как
+> `./.htpasswd:/etc/nginx/.htpasswd:ro`, то есть ожидается в каталоге `deploy/`
+> рядом с compose-файлом. Если файла не существует, Docker создаст на его месте
+> **директорию**, и контейнер nginx упадёт при старте.
 
 ```bash
-htpasswd -c .htpasswd <username>
+htpasswd -c deploy/.htpasswd <username>
 ```
 
 ### 4. Запуск
 ```bash
-./scripts/build.sh
+./deploy/build.sh
 ```
 
 Скрипт проверяет предусловия, собирает образы, поднимает стек, дожидается
 статуса `healthy` у всех сервисов с healthcheck и прогоняет проверки API.
 При неудаче сам печатает диагностику — состояние контейнеров и хвост логов
-тех, что не поднялись. Справка: `./scripts/build.sh --help`.
+тех, что не поднялись. Справка: `./deploy/build.sh --help`.
 
 Образы помечаются тегом — коротким хешем текущего коммита — и дополнительно
 как `:latest`. Откат на предыдущую сборку без пересборки:
 
 ```bash
-TAG=<хеш> docker compose up -d
+cd deploy && TAG=<хеш> docker compose up -d
 ```
 
 Доступные теги: `docker images easysochi/contact-api`.
@@ -84,12 +85,32 @@ sudo logrotate -d /etc/logrotate.d/easysochi_pro
 
 ## 📂 Структура проекта
 
-- `/easysochi-site` — фронтенд Hugo
-- `/easysochi-backend` — бэкенд FastAPI
-- `/nginx` — конфиг внутреннего реверс-прокси
-- `/docker-compose.yml` — описание сервисов
-- `/CONTRIBUTING.md` — порядок разработки и проверки изменений
-- `/scripts/build.sh` — сборка, запуск и проверка стека одной командой
+Каждый сервис держит свой Dockerfile в собственном каталоге `docker/`, а всё,
+что относится к развёртыванию, собрано в `deploy/`.
+
+```
+easysochi-site/          фронтенд Hugo
+  docker/Dockerfile
+  .dockerignore
+easysochi-backend/       бэкенд FastAPI
+  docker/Dockerfile
+  .dockerignore
+nginx/                   внутренний реверс-прокси
+  docker/Dockerfile
+  nginx.conf, conf.d/
+deploy/                  всё о развёртывании
+  docker-compose.yml     описание сервисов
+  build.sh               сборка, запуск и проверка одной командой
+  .env.example           шаблон переменных окружения
+  .env                   рабочие переменные (в репозиторий не попадает)
+  .htpasswd              basic auth для stats (в репозиторий не попадает)
+  logrotate/             конфиг ротации логов для хоста
+CONTRIBUTING.md          порядок разработки и проверки изменений
+progress.md              журнал работ и бэклог
+```
+
+Команды `docker compose` выполняются из каталога `deploy/` — там лежит
+compose-файл, и оттуда же берутся `.env` и `.htpasswd`.
 
 ## 🔐 Безопасность
 

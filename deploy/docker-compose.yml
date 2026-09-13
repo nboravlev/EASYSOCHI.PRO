@@ -1,3 +1,8 @@
+# Имя проекта задано явно. Compose выводит его из каталога compose-файла,
+# и после переезда в deploy/ сеть и тома получили бы имена deploy_*, то есть
+# были бы пересозданы. Фиксируем прежнее значение.
+name: easysochipro
+
 # Ограничение размера логов Docker: без него json-file растёт бесконечно
 x-logging: &default-logging
   driver: "json-file"
@@ -40,8 +45,8 @@ services:
     #   TAG=<хеш> docker compose up -d
     image: easysochi/site:${TAG:-latest}
     build:
-      context: ./easysochi-site
-      dockerfile: Dockerfile
+      context: ../easysochi-site
+      dockerfile: docker/Dockerfile
     container_name: easysochi_site
     restart: unless-stopped
     volumes:
@@ -59,8 +64,8 @@ services:
   contact_api:
     image: easysochi/contact-api:${TAG:-latest}
     build:
-      context: ./easysochi-backend
-      dockerfile: Dockerfile
+      context: ../easysochi-backend
+      dockerfile: docker/Dockerfile
     user: "1000:1000"
     container_name: easysochi_contact_api
     restart: unless-stopped
@@ -84,8 +89,8 @@ services:
   nginx:
     image: easysochi/nginx:${TAG:-latest}
     build:
-      context: ./nginx
-      dockerfile: Dockerfile
+      context: ../nginx
+      dockerfile: docker/Dockerfile
     container_name: easysochi_nginx
     restart: unless-stopped
     ports:

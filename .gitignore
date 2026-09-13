@@ -4,8 +4,8 @@
 secrets/
 *.pem
 
-# Но разрешить файл с примером
-!/.env.example
+# Но разрешить файл с примером (после переезда конфигурации живёт в deploy/)
+!deploy/.env.example
 
 # --- Docker ---
 .docker/
