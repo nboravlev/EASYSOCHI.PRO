@@ -510,6 +510,32 @@ gh pr reopen 12, gh pr edit 12 --base main, удаление временной 
   упал бы после перехода на схему. Добавлены проверки 4.3 и 4.4 на
   несоответствие контакта способу связи и на тему вне списка
 
+2026-09-13
+*refactor/hugo-build-image
+
+Что сделано:
+- сборка сайта переведена с ubuntu:22.04 + wget на готовый образ
+  hugomods/hugo:base-0.146.0. Раньше каждая сборка тянула с GitHub 40+ МБ
+  архива Hugo без сверки контрольной суммы и ломалась бы, будь GitHub
+  недоступен. Плюс отдельный stage на ubuntu существовал только ради wget
+- заодно "as builder" заменено на "AS builder" — BuildKit ругался FromAsCasing
+
+Про выбор тега:
+- в бэклоге я записала hugomods/hugo:exts-0.146.0, но ТАКОГО ТЕГА НЕ
+  СУЩЕСТВУЕТ. Проверил по Docker Hub: есть 0.146.0, base-, reg-, std-,
+  std-exts-, reg-exts- и другие
+- у hugomods редакция задаётся префиксом: теги БЕЗ std это extended,
+  с std — обычная редакция. exts добавляет PostCSS, Asciidoc и Pandoc,
+  которые нам не нужны
+- взял base-0.146.0: минимальный образ ровно с extended-Hugo, без Node, Go и
+  Git. 44 МБ, есть под amd64 и arm64
+- extended сохранён намеренно, хотя SCSS в проекте нет: прежний Dockerfile
+  качал hugo_extended, а PaperMod проверяет hugo.IsExtended и добавляет webp
+  в список обрабатываемых форматов обложек. Менять редакцию заодно с
+  переездом на готовый образ — лишний риск, это отдельное решение
+- git в образе не нужен: модули Hugo не используются, enableGitInfo не задан,
+  тема PaperMod лежит каталогом в themes/
+
 ================================План на обновление EASYSOCHI.PRO======================
 *******************Приоритет: Высокий*****************************************
 [] - уведомления в Telegram не доходят с сервера ВООБЩЕ: в логах от 2026-09-13 все
@@ -553,7 +579,7 @@ gh pr reopen 12, gh pr edit 12 --base main, удаление временной 
      .hugo_build.lock с машины сборки, устаревший кеш resources/ может испортить сборку
 [] - goaccess_pro стартует раньше, чем nginx создаст лог, и уходит в цикл рестартов.
      Добавить depends_on на nginx
-[] - Hugo качается wget-ом при каждой сборке: 40+ МБ с GitHub, без сверки контрольной
+[x] - Hugo качается wget-ом при каждой сборке: 40+ МБ с GitHub, без сверки контрольной
      суммы, плюс целый stage на ubuntu:22.04 ради wget. Перейти на готовый образ
      hugomods/hugo:exts-0.146.0 — быстрее, меньше, версия зафиксирована
 [] - тома с driver_opts type=none/o=bind — это bind-mount, переодетый в volume. Ловушка:
@@ -584,7 +610,7 @@ gh pr reopen 12, gh pr edit 12 --base main, удаление временной 
 --- инфраструктура, по итогам ревью docker 2026-09-10 ---
 [] - apk add --no-cache gettext в nginx/Dockerfile лишний: envsubst есть в образе всегда, им пользуется сам entrypoint 20-envsubst-on-templates.sh
 [] - из базового образа остаётся /etc/nginx/conf.d/default.conf и подключается через include conf.d/*.conf — мёртвый server-блок на 80. Удалить в Dockerfile
-[] - в easysochi-site/Dockerfile "as builder" строчными — BuildKit ругается FromAsCasing
+[x] - в easysochi-site/Dockerfile "as builder" строчными — BuildKit ругается FromAsCasing
 [] - user: "1000:1000" в compose дублирует USER easysochipro из Dockerfile,
      два источника правды для одного uid
 [x] - образы без явных имён и тегов, откатиться на предыдущую сборку нельзя.
