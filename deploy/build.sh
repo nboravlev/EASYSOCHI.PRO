@@ -179,6 +179,26 @@ if [ ! -f "$SCRIPT_DIR/.htpasswd" ]; then
 fi
 ok ".htpasswd на месте"
 
+# Переменные, без которых стек не поднимется осмысленно. Проверяем их здесь,
+# потому что compose на отсутствие переменной только предупреждает и
+# подставляет пустую строку: база поднимется без пароля, nginx получит пустой
+# server_name, и разбираться в этом потом дороже.
+REQUIRED_VARS="POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD POSTGRES_PORT DATABASE_URL DATABASE_URL_SYNC DOMAIN_PRO PRO_STATS"
+MISSING_VARS=""
+
+for VAR in $REQUIRED_VARS; do
+  if ! grep -qE "^[[:space:]]*$VAR[[:space:]]*=[[:space:]]*[^[:space:]]" "$SCRIPT_DIR/.env"; then
+    MISSING_VARS="$MISSING_VARS $VAR"
+  fi
+done
+
+if [ -n "$MISSING_VARS" ]; then
+  fail "в deploy/.env не заданы обязательные переменные:$MISSING_VARS"
+  printf "  Сверьтесь с шаблоном: deploy/.env.example\n" >&2
+  exit 1
+fi
+ok "обязательные переменные заданы"
+
 # ----------------------------------------------------------------- тег образов
 
 if [ -z "$TAG" ]; then

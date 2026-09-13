@@ -16,7 +16,6 @@ services:
     image: postgres:15
     container_name: postgres_db_easysochi
     restart: always
-    env_file: .env
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -69,7 +68,33 @@ services:
     user: "1000:1000"
     container_name: easysochi_contact_api
     restart: unless-stopped
-    env_file: .env
+    # Переменные перечислены поимённо: env_file: .env отдавал контейнеру весь
+    # файл целиком, включая POSTGRES_PASSWORD, которым приложение не
+    # пользуется — оно ходит в базу по DATABASE_URL.
+    #
+    # У необязательных переменных проставлены значения по умолчанию через
+    # ${VAR:-default}. Без них отсутствующая в .env переменная приехала бы
+    # в контейнер пустой строкой и перекрыла бы умолчание в коде: например
+    # LOG_LEVEL="" уронил бы logging.basicConfig при старте.
+    environment:
+      # подключение к БД
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL_SYNC=${DATABASE_URL_SYNC}
+      # платёжная система
+      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-robokassa}
+      - ROBOKASSA_SHOP_ID=${ROBOKASSA_SHOP_ID:-}
+      - ROBOKASSA_PASSWORD_1=${ROBOKASSA_PASSWORD_1:-}
+      - ROBOKASSA_PASSWORD_2=${ROBOKASSA_PASSWORD_2:-}
+      - ROBOKASSA_TEST_MODE=${ROBOKASSA_TEST_MODE:-1}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID:-}
+      - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY:-}
+      # уведомления и ссылки
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - CHAT_ID=${CHAT_ID}
+      - DOMAIN_URL=${DOMAIN_URL}
+      # логирование
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SQL_ECHO=${SQL_ECHO:-0}
     volumes:
       - easysochipro_media:/app/media
     depends_on:
@@ -100,7 +125,13 @@ services:
       - easysochipro_stats:/var/www/stats
       - easysochipro_media:/var/www/media
       - ./.htpasswd:/etc/nginx/.htpasswd:ro
-    env_file: .env
+    # Нужны ровно две переменные — их подставляет envsubst в шаблон
+    # conf.d/easysochi.conf.template. Раньше стоял env_file: .env, и nginx
+    # получал заодно TELEGRAM_TOKEN, POSTGRES_PASSWORD и ключи платёжных
+    # систем, которые ему не нужны и видны любому, кто сделает docker exec.
+    environment:
+      - DOMAIN_PRO=${DOMAIN_PRO}
+      - PRO_STATS=${PRO_STATS}
     depends_on:
       easysochi-site:
         condition: service_healthy
