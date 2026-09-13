@@ -2,10 +2,12 @@ import hashlib
 import uuid
 import logging
 from typing import Dict, Any, Optional
+
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PaymentService, PROVIDER_ROBOKASSA
 from app.services.notification_service import NotificationService
 from app.core.config import settings
 from app.db.models.payments import Payment, PaymentStatus
@@ -18,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 class RobokassaService(PaymentService):
     """Реализация платежного сервиса Robokassa"""
-    
+
+    provider = PROVIDER_ROBOKASSA
+
     def __init__(self):
         self.shop_id = settings.ROBOKASSA_SHOP_ID
         self.password_1 = settings.ROBOKASSA_PASSWORD_1
@@ -38,6 +42,10 @@ class RobokassaService(PaymentService):
         
         return hashlib.md5(sign_str.encode('utf-8')).hexdigest().upper()
     
+    async def parse_webhook(self, request: Request) -> Dict[str, Any]:
+        """Robokassa шлёт уведомление как form-data."""
+        return dict(await request.form())
+
     async def create_payment(
         self,
         amount: int,
@@ -91,14 +99,15 @@ class RobokassaService(PaymentService):
         # Сохраняем платеж в БД
         new_payment = Payment(
             user_id=user_id,
-            yk_payment_id=str(inv_id),
+            provider=self.provider,
+            provider_payment_id=str(inv_id),
             amount=int(amount * 100),  # В копейки
             currency="RUB",
             description=f"Donation from {name or 'anon'}",
             status=PaymentStatus.pending,
             confirmation_url=redirect_url,
             paid=False,
-            metadata={"email": email, "name": name}
+            extradata={"email": email, "name": name},
         )
         db.add(new_payment)
         await db.commit()
@@ -135,7 +144,10 @@ class RobokassaService(PaymentService):
         
         # Ищем платеж в БД
         result = await db.execute(
-            select(Payment).where(Payment.yk_payment_id == str(inv_id))
+            select(Payment).where(
+                Payment.provider == self.provider,
+                Payment.provider_payment_id == str(inv_id),
+            )
         )
         payment = result.scalars().first()
         

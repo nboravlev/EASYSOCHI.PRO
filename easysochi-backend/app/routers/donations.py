@@ -7,8 +7,7 @@ from sqlalchemy import func, desc, select
 from app.db.db_async import get_async_session
 from app.db.models.payments import Payment, PaymentStatus
 from app.db.models.users import User
-from app.services.robokassa_service import RobokassaService
-from app.services.notification_service import NotificationService
+from app.services import get_payment_service
 from app.schemas.payment_schemas import (
     DonationRequest, DonationResponse, 
     StatsResponse, DonorInfo
@@ -20,8 +19,10 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["donations"])
 
-# Инициализируем сервис
-payment_service = RobokassaService()
+# Активная платёжная система выбирается переменной PAYMENT_PROVIDER в .env.
+# Фабрика падает на импорте при неизвестном значении — лучше не подняться,
+# чем принимать платежи не в ту систему.
+payment_service = get_payment_service()
 
 
 async def get_or_create_user(db: AsyncSession, email: str, name: str) -> User | None:
@@ -84,22 +85,23 @@ async def payment_webhook(
     db: AsyncSession = Depends(get_async_session)
 ):
     """
-    Вебхук от Robokassa (ResultURL).
+    Вебхук платёжной системы.
 
-    Тело ответа должно быть ровно "OK<номер счёта>" открытым текстом — так
-    описан ResultURL в документации Robokassa. Любой другой ответ, включая
-    JSON с той же строкой внутри поля, она считает неуспехом и повторяет
-    уведомление, пока не получит ожидаемый текст.
+    Ответ отдаётся открытым текстом, потому что Robokassa требует в теле
+    ResultURL ровно "OK<номер счёта>": любой другой ответ, включая JSON с той
+    же строкой внутри поля, она считает неуспехом и повторяет уведомление.
+    ЮKassa смотрит только на код 200, и текстовый ответ её устраивает,
+    поэтому формат общий для обоих провайдеров.
 
     IP проверяется на уровне Nginx (geo $is_payment_service), подпись —
-    в RobokassaService по паролю #2.
+    в сервисе провайдера.
     """
-    logger.info("=== Входящий вебхук от Robokassa ===")
+    logger.info("=== Входящий вебхук от %s ===", payment_service.provider)
     
     try:
-        # Robokassa отправляет form-data, а не JSON
-        form_data = await request.form()
-        data = dict(form_data)
+        # Формат тела зависит от провайдера: Robokassa шлёт form-data,
+        # ЮKassa — JSON. Разбор живёт в сервисе.
+        data = await payment_service.parse_webhook(request)
         
         # Полный payload не логируем: в нём Shp_email, Shp_name и SignatureValue.
         # InvId и OutSum пишет process_webhook.
@@ -150,8 +152,8 @@ async def get_donation_stats(
         name_display = "Аноним"
         if user and user.full_name:
             name_display = user.full_name
-        elif payment.metadata and payment.metadata.get("name"):
-            name_display = payment.metadata["name"]
+        elif payment.extradata and payment.extradata.get("name"):
+            name_display = payment.extradata["name"]
         
         donors_data.append(DonorInfo(
             name=name_display,
