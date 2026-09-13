@@ -22,9 +22,19 @@ class NotificationService:
                     f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage",
                     json={"chat_id": settings.CHAT_ID, "text": text}
                 )
-                return response.status_code == 200
-        except Exception as e:
-            logger.error(f"Telegram sending error: {e}")
+            if response.status_code != 200:
+                # Тело ошибки Telegram персональных данных не содержит,
+                # только error_code и description — без них причину не понять.
+                logger.error(
+                    "Telegram rejected notification: status=%s body=%s",
+                    response.status_code,
+                    response.text[:300],
+                )
+                return False
+            return True
+        except Exception as exc:
+            # repr, а не str: у таймаутов httpx пустое строковое представление
+            logger.error("Telegram sending error: %r", exc)
             return False
     
     @staticmethod

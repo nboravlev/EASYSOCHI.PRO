@@ -24,7 +24,10 @@ async def check_db():
         # Вставка тестовой записи
         test_form = ContactForm(
             name="Test Ivan",
-            email="test@mail.com",
+            contact_type="email",
+            contact_value="test@mail.com",
+            topic="Другое",
+            source="check_db_async.py",
             message="Text"
         )
         session.add(test_form)

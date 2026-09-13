@@ -20,9 +20,15 @@ sys.exit(), а pytest считает SystemExit провалом теста да
        3.1 корректная подпись: ответ должен быть ровно "OK<InvId>"
            открытым текстом, как требует ResultURL Robokassa
        3.2 неверная подпись: ответ 400 и без подтверждающего "OK"
-  4. POST /api/v2/form/              — валидация формы обратной связи:
-       4.1 пустые данные отклоняются
-       4.2 неверный формат отклоняется
+  4. Форма обратной связи:
+       4.0 GET  /api/v2/form/topics отдаёт список тем обращения
+       4.1 POST /api/v2/form/ с пустыми данными отклоняется
+       4.2 то же с полями не из схемы
+       4.3 контакт не соответствует выбранному способу связи
+       4.4 тема вне списка
+     Только негативные проверки: валидная заявка создала бы запись в боевой
+     таблице и слала бы уведомление в Telegram при каждой сборке. Код ответа
+     на невалидный ввод — 422: валидацию делает pydantic-схема.
   5. Время ответа /donations/stats
 
 ЧЕГО СКРИПТ НЕ ПРОВЕРЯЕТ
@@ -359,34 +365,100 @@ def run_checks():
             results.append(True)
 
         # ============================================
-        # 4. ТЕСТ ФОРМЫ (POST /form/ - негативные тесты)
+        # 4. ТЕСТ ФОРМЫ (GET /form/topics и негативные проверки POST /form/)
         # ============================================
-        print_info("\n4. Тестирование валидации формы...")
-        
-        # Тест 4.1: Пустые данные (ожидается 400)
-        print_info("  4.1 Пустые данные...")
+        print_info("\n4. Тестирование формы обратной связи...")
+
+        # Тест 4.0: список тем обращения
+        print_info("  4.0 Список тем обращения...")
         try:
-            r = client.post(f"{BASE_URL}/form/", json={})
-            if r.status_code == 400:
-                print_success("  Пустые данные отклонены")
+            r = client.get(f"{BASE_URL}/form/topics")
+            topics = r.json() if r.status_code == 200 else None
+            if isinstance(topics, list) and "Другое" in topics:
+                print_success(f"  Тем получено: {len(topics)}")
                 results.append(True)
             else:
-                print_warning(f"  Неожиданный статус {r.status_code}")
+                print_error(f"  Неожиданный ответ {r.status_code}: {r.text[:300]}")
                 results.append(False)
         except Exception as e:
             print_error(f"  Error: {e}")
             results.append(False)
-        
-        # Тест 4.2: Неверный формат данных
+
+        # Дальше только негативные проверки: валидная заявка создала бы запись
+        # в боевой таблице и отправила бы уведомление в Telegram при каждом
+        # прогоне сборки.
+        #
+        # Код ответа именно 422, а не 400: валидацию делает pydantic-схема
+        # ContactFormCreate, и FastAPI по стандарту отвечает 422. Раньше
+        # роутер разбирал сырой JSON вручную и возвращал 400.
+
+        # Тест 4.1: Пустые данные
+        print_info("  4.1 Пустые данные...")
+        try:
+            r = client.post(f"{BASE_URL}/form/", json={})
+            if r.status_code == 422:
+                print_success("  Пустые данные отклонены")
+                results.append(True)
+            else:
+                print_error(f"  Ожидался 422, получен {r.status_code}: {r.text[:300]}")
+                results.append(False)
+        except Exception as e:
+            print_error(f"  Error: {e}")
+            results.append(False)
+
+        # Тест 4.2: Полей схемы нет вовсе
         print_info("  4.2 Неверный формат данных...")
         try:
             payload = {"invalid": "data", "something": "wrong"}
             r = client.post(f"{BASE_URL}/form/", json=payload)
-            if r.status_code == 400 or r.status_code == 422:
+            if r.status_code == 422:
                 print_success("  Неверный формат отклонен")
                 results.append(True)
             else:
-                print_warning(f"  Неожиданный статус {r.status_code}")
+                print_error(f"  Ожидался 422, получен {r.status_code}: {r.text[:300]}")
+                results.append(False)
+        except Exception as e:
+            print_error(f"  Error: {e}")
+            results.append(False)
+
+        # Тест 4.3: контакт не соответствует выбранному способу связи —
+        # проверяет field_validator, а не только объявленные типы полей
+        print_info("  4.3 Email не похож на адрес...")
+        try:
+            payload = {
+                "name": "Тест",
+                "contact_type": "email",
+                "contact_value": "это-не-почта",
+                "topic": "Другое",
+                "message": "Проверка валидации контакта",
+            }
+            r = client.post(f"{BASE_URL}/form/", json=payload)
+            if r.status_code == 422 and "email" in r.text.lower():
+                print_success("  Некорректный email отклонён")
+                results.append(True)
+            else:
+                print_error(f"  Ожидался 422 с упоминанием email, получен {r.status_code}: {r.text[:300]}")
+                results.append(False)
+        except Exception as e:
+            print_error(f"  Error: {e}")
+            results.append(False)
+
+        # Тест 4.4: тема вне списка
+        print_info("  4.4 Неизвестная тема обращения...")
+        try:
+            payload = {
+                "name": "Тест",
+                "contact_type": "email",
+                "contact_value": "test@example.com",
+                "topic": "Темы такой нет",
+                "message": "Проверка валидации темы",
+            }
+            r = client.post(f"{BASE_URL}/form/", json=payload)
+            if r.status_code == 422:
+                print_success("  Неизвестная тема отклонена")
+                results.append(True)
+            else:
+                print_error(f"  Ожидался 422, получен {r.status_code}: {r.text[:300]}")
                 results.append(False)
         except Exception as e:
             print_error(f"  Error: {e}")
