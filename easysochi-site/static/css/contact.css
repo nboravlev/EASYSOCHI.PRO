@@ -15,6 +15,7 @@ html:not([data-theme]) #contact-form {
 }
 
 html[data-theme="light"] #contact-form input,
+html[data-theme="light"] #contact-form select,
 html[data-theme="light"] #contact-form textarea {
   background-color: #fff;
   border: 1.5px solid #0077b6;
@@ -28,6 +29,7 @@ html[data-theme="dark"] #contact-form {
 }
 
 html[data-theme="dark"] #contact-form input,
+html[data-theme="dark"] #contact-form select,
 html[data-theme="dark"] #contact-form textarea {
   background-color: #2b2b2b;
   border: 1.5px solid #0096c7;
