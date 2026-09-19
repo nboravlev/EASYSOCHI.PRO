@@ -89,9 +89,25 @@ services:
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID:-}
       - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY:-}
       # уведомления и ссылки
+      #
+      # Уведомления менеджеру уходят почтой: api.telegram.org с этого сервера
+      # недоступен. Переменные Telegram оставлены, но ничего не отправляют.
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - CHAT_ID=${CHAT_ID}
       - DOMAIN_URL=${DOMAIN_URL}
+      # почта: транспорт уведомлений. Без SMTP_HOST и MANAGER_EMAILS письма
+      # не отправляются — приложение поднимется и напишет об этом в лог
+      # строкой "Уведомления, почта: ..." при старте.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_SSL=${SMTP_SSL:-0}
+      - SMTP_STARTTLS=${SMTP_STARTTLS:-1}
+      - SMTP_TIMEOUT=${SMTP_TIMEOUT:-20}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-EASYSOCHI}
+      - MANAGER_EMAILS=${MANAGER_EMAILS:-}
       # логирование
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SQL_ECHO=${SQL_ECHO:-0}

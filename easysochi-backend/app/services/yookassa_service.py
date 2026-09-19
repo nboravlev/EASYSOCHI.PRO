@@ -10,7 +10,7 @@ from sqlalchemy import select
 from yookassa import Configuration, Payment as YookassaPayment
 
 from app.services.payment_service import PaymentService, PROVIDER_YOOKASSA
-from app.services.notification_service import NotificationService
+from app.services.notification_service import notification_service
 from app.core.config import settings
 from app.db.models.payments import Payment, PaymentStatus
 from app.db.models.payment_events import PaymentEvent
@@ -138,18 +138,26 @@ class YookassaService(PaymentService):
             raw_data=request_data,
         ))
 
-        if status == "succeeded":
+        succeeded = status == "succeeded"
+
+        if succeeded:
             payment.status = PaymentStatus.succeeded
             payment.paid = True
-            await NotificationService.notify_successful_payment(
-                amount=payment.amount / 100,
-                payment_id=payment.id,
-                method=(obj.get("payment_method") or {}).get("type"),
-            )
         elif status == "canceled":
             payment.status = PaymentStatus.canceled
 
         await db.commit()
+
+        # Уведомление — после коммита. Раньше письмо (а до него запрос в
+        # Telegram) отправлялось до сохранения: на время таймаута SMTP —
+        # до 20 секунд — платёж оставался незафиксированным, а платёжная
+        # система столько ответа не ждёт и повторяет уведомление.
+        if succeeded:
+            await notification_service.notify_successful_payment(
+                payment_id=payment.id,
+                amount=payment.amount / 100,
+                method=(obj.get("payment_method") or {}).get("type"),
+            )
 
         # ЮKassa считает уведомление принятым по коду 200, тело ей безразлично.
         return {"status": "ok", "detail": "OK"}
