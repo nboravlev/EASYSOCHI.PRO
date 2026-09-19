@@ -10,13 +10,7 @@
   Темы обращения не захардкожены: список приходит из /api/v2/form/topics,
   который отдаёт значения enum ContactTopic. Единственный источник правды —
   бэкенд.
-
-  Вид и таймер сообщения о результате отправки живут в partials/form-status.html
-  — общие с формой обратного звонка. Здесь остаются только тексты: они у
-  каждой формы свои.
 */}}
-
-{{ partial "form-status.html" .Page }}
 
 <style>
 /* Селекторы начинаются с #contact-form не для красоты: в contact.css есть
@@ -85,6 +79,24 @@
   cursor: progress;
 }
 
+#contact-form .contact-form-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: none;
+}
+
+#contact-form .contact-form-status.ok {
+  display: block;
+  border: 1px solid rgba(60, 160, 90, 0.6);
+  background-color: rgba(60, 160, 90, 0.1);
+}
+
+#contact-form .contact-form-status.error {
+  display: block;
+  border: 1px solid rgba(200, 70, 70, 0.6);
+  background-color: rgba(200, 70, 70, 0.1);
+}
 </style>
 
 <form id="contact-form" style="max-width: 500px; margin: auto;">
@@ -129,7 +141,7 @@
   <input type="hidden" name="source" value="{{ .Page.RelPermalink }}">
   <button type="submit" id="contact-form-submit">Отправить</button>
 
-  <div class="es-status" id="contact-form-status"></div>
+  <div class="contact-form-status" id="contact-form-status"></div>
 </form>
 
 <script>
@@ -148,9 +160,22 @@ document.addEventListener("DOMContentLoaded", () => {
   // инициализации формы.
   const COUNTRY_CODE = "+7";
 
-  // Оформление и таймер — в partials/form-status.html. Здесь только обёртка,
-  // чтобы не повторять имя элемента в каждом вызове.
-  const showStatus = (message, kind) => esFormStatus(statusBox, message, kind);
+  // Через сколько убирать сообщение об успехе. Ошибку не прячем: её нужно
+  // успеть прочитать и поправить поле.
+  const STATUS_HIDE_MS = 8000;
+
+  let hideTimer = null;
+
+  const showStatus = (message, kind) => {
+    clearTimeout(hideTimer);
+    statusBox.textContent = message;
+    statusBox.className = "contact-form-status " + kind;
+    if (kind === "ok") {
+      hideTimer = setTimeout(() => {
+        statusBox.className = "contact-form-status";
+      }, STATUS_HIDE_MS);
+    }
+  };
 
   // --- Темы обращения ---
   fetch("/api/v2/form/topics")
