@@ -15,6 +15,7 @@ html:not([data-theme]) #contact-form {
 }
 
 html[data-theme="light"] #contact-form input,
+html[data-theme="light"] #contact-form select,
 html[data-theme="light"] #contact-form textarea {
   background-color: #fff;
   border: 1.5px solid #0077b6;
@@ -28,6 +29,7 @@ html[data-theme="dark"] #contact-form {
 }
 
 html[data-theme="dark"] #contact-form input,
+html[data-theme="dark"] #contact-form select,
 html[data-theme="dark"] #contact-form textarea {
   background-color: #2b2b2b;
   border: 1.5px solid #0096c7;
@@ -42,6 +44,7 @@ html[data-theme="dark"] #contact-form textarea {
 }
 
 #contact-form input,
+#contact-form select,
 #contact-form textarea {
   width: 100%;
   padding: 0.6rem;
@@ -52,8 +55,41 @@ html[data-theme="dark"] #contact-form textarea {
   transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
 }
 
-#contact-form input:focus,
-#contact-form textarea:focus {
+/* Стрелку у select рисуем сами.
+   appearance: none убирает «родное» оформление контрола целиком — вместе
+   с системной стрелкой, которая в каждой ОС своя, и вместе с рамкой,
+   которую браузер подставлял вместо нашей при раскрытии списка. */
+#contact-form select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1em;
+  /* Место под стрелку, чтобы длинная тема не заезжала на неё. */
+  padding-right: 2.2rem;
+}
+
+/* currentColor внутри data-URI не работает: фоновая картинка не наследует
+   цвет текста, поэтому на тёмной теме нужен отдельный, светлый вариант. */
+html[data-theme="dark"] #contact-form select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+/* Раскрытый список рисует система, а не страница. На тёмной теме у select
+   color: #fff, и в списке белый текст ложился на светлый системный фон. */
+#contact-form select option {
+  color: initial;
+}
+
+/* Префикс html здесь не для красоты. Тематические правила выше начинаются
+   с html[data-theme=...] и весят больше, чем "#contact-form input:focus";
+   без этого префикса border-color при фокусе просто не применялся — поле
+   получало только тень, а рамка оставалась прежней. С префиксом вес равный,
+   а правило идёт ниже по файлу, поэтому выигрывает оно. */
+html #contact-form input:focus,
+html #contact-form select:focus,
+html #contact-form textarea:focus {
   border-color: #0096c7;
   box-shadow: 0 0 4px rgba(0,150,199,0.3);
 }
