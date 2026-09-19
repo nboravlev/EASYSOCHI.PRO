@@ -86,6 +86,33 @@ class ContactFormCreate(BaseModel):
         return value
 
 
+class CallbackRequest(BaseModel):
+    """Запрос обратного звонка.
+
+    Отдельная схема, а не ContactFormCreate со значениями по умолчанию.
+    Виджет спрашивает только имя и телефон, а contact_type, topic и текст
+    заявки проставляет сервер: досылать их скрытыми полями значит доверять
+    браузеру то, что и так известно на стороне приёма.
+    """
+
+    name: str = Field(..., min_length=2, max_length=255, description="Имя")
+    phone: str = Field(..., min_length=3, max_length=255, description="Телефон для звонка")
+    source: Optional[str] = Field(None, max_length=200, description="Страница, с которой отправлена форма")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        """Та же проверка, что и для contact_value со способом связи phone.
+
+        Считаем цифры, а не сверяем с маской: номер приходит как человек его
+        набрал — со скобками, пробелами, плюсом или без него.
+        """
+        value = value.strip()
+        if len(re.sub(r"\D", "", value)) < 7:
+            raise ValueError("Номер телефона слишком короткий, нужно минимум 7 цифр")
+        return value
+
+
 class ContactFormAccepted(BaseModel):
     """Ответ на принятую заявку.
 

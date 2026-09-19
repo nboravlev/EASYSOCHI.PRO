@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.db_async import get_async_session
 from app.db.models.contact_form import ContactForm
 from app.schemas.form_schemas import (
+    CallbackRequest,
     ContactFormAccepted,
     ContactFormCreate,
     ContactTopic,
@@ -126,6 +127,58 @@ async def receive_form(
     )
     # Уведомление уходит фоном: ответ клиенту отдаётся сразу после коммита,
     # не дожидаясь Telegram.
+    background_tasks.add_task(notify_telegram, text)
+
+    return ContactFormAccepted(id=entry.id)
+
+
+# Текст заявки для обратного звонка. Человек его не пишет — виджет спрашивает
+# только имя и телефон, — но колонка message обязательная, и пустая строка в
+# списке заявок читалась бы как потерянные данные.
+CALLBACK_MESSAGE = "Запрос обратного звонка"
+
+
+@router.post("/callback", response_model=ContactFormAccepted)
+async def request_callback(
+    callback_data: CallbackRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Приём запроса обратного звонка.
+
+    Ложится в ту же таблицу, что и обычная заявка: это тот же контакт, просто
+    собранный короткой формой. Тема — "Другое": ContactTopic отдаётся фронту
+    эндпоинтом /topics и строит выпадающий список, поэтому заводить в нём
+    отдельное значение ради служебной пометки значило бы показать её человеку
+    среди тем обращения.
+    """
+    entry = ContactForm(
+        name=callback_data.name,
+        contact_type=ContactType.phone.value,
+        contact_value=callback_data.phone,
+        topic=ContactTopic.other.value,
+        source=callback_data.source,
+        message=CALLBACK_MESSAGE,
+    )
+
+    try:
+        db.add(entry)
+        await db.commit()
+        await db.refresh(entry)
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Failed to save callback request")
+        raise HTTPException(status_code=500, detail="DB error")
+
+    # В лог — только идентификатор: имя и телефон это персональные данные.
+    logger.info("Callback request saved, id=%s", entry.id)
+
+    text = (
+        f"📞 Заказ обратного звонка\n\n"
+        f"👤 Имя: {callback_data.name}\n"
+        f"📞 Телефон: {callback_data.phone}\n"
+        f"🔗 Источник: {callback_data.source or 'не указан'}"
+    )
     background_tasks.add_task(notify_telegram, text)
 
     return ContactFormAccepted(id=entry.id)
