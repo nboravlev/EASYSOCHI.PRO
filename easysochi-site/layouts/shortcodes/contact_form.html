@@ -67,22 +67,12 @@
   line-height: 1;
 }
 
-/* select не покрыт правилами contact.css, где перечислены только
-   input и textarea, — задаём его здесь в той же манере. */
-#contact-form select {
-  width: 100%;
-  padding: 0.6rem;
-  margin-top: 0.3rem;
-  border: 1px solid rgba(128, 128, 128, 0.45);
-  border-radius: 6px;
-  background-color: transparent;
-  color: inherit;
-  font-size: 1rem;
-}
-
-#contact-form select option {
-  color: initial;
-}
+/* Стилей select здесь больше нет: он перечислен в contact.css рядом с input
+   и textarea. Раньше правила стояли в двух местах и расходились — в покое
+   поле брало вид из contact.css, а при фокусе оставалось с системным
+   оформлением, потому что "outline: none" и правило :focus про select не
+   знали. Инлайновый <style> идёт в документе ниже подключённого файла, так
+   что дубль здесь молча перебивал бы contact.css. */
 
 #contact-form button[disabled] {
   opacity: 0.6;

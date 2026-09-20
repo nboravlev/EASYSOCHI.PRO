@@ -24,8 +24,42 @@ class Settings:
     GOAL_AMOUNT: int = 156000  # Цель сбора (рублей)
     
     # Telegram
+    #
+    # Переменные остались, но уведомления через Telegram больше не уходят:
+    # с этого сервера api.telegram.org недоступен. Транспорт уведомлений —
+    # почта, см. ниже и app/services/notification_service.py.
     TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
     CHAT_ID: str = os.getenv("CHAT_ID", "")
-    
+
+    # Почта: транспорт уведомлений
+    #
+    # Если SMTP_HOST пуст, отправка не делается вовсе — сервис пишет в лог
+    # предупреждение и возвращает управление. Так стек поднимается на машине
+    # разработчика без почтового сервера.
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "").strip()
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT") or 587)
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+
+    # Два разных способа шифрования, путать нельзя:
+    #   SMTP_SSL=1      — соединение сразу в TLS, обычный порт 465
+    #   SMTP_STARTTLS=1 — открытое соединение, потом команда STARTTLS, порт 587
+    SMTP_SSL: bool = os.getenv("SMTP_SSL", "0") == "1"
+    SMTP_STARTTLS: bool = os.getenv("SMTP_STARTTLS", "1") == "1"
+    SMTP_TIMEOUT: int = int(os.getenv("SMTP_TIMEOUT") or 20)
+
+    # Адрес в поле From. По умолчанию совпадает с логином: почти у всех
+    # провайдеров отправка от чужого адреса отклоняется.
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM") or os.getenv("SMTP_USER", "")
+    EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "EASYSOCHI")
+
+    # Кому уходят уведомления о заявках, звонках и платежах.
+    # Несколько адресов — через запятую.
+    MANAGER_EMAILS: List[str] = [
+        address.strip()
+        for address in os.getenv("MANAGER_EMAILS", "").split(",")
+        if address.strip()
+    ]
+
 
 settings = Settings()

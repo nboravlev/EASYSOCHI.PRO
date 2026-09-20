@@ -1,0 +1,298 @@
+{{/*
+  Форма обратного звонка.
+
+  КАК ПОДКЛЮЧИТЬ
+  --------------
+  1. Вставить в любую страницу контента одной строкой:
+
+         {{< callback_form >}}
+
+     Больше ничего не нужно: оформление, скрипт и блок для сообщения лежат
+     внутри шорткода, отдельного css-файла он не требует. На странице можно
+     ставить несколько форм подряд только на разных страницах — id внутри
+     виджета фиксированные, и второй экземпляр на той же странице сломает
+     обработчик.
+
+  2. Заголовок и подпись при желании задаются параметрами:
+
+         {{< callback_form title="Нужна консультация?" text="Оставьте номер" >}}
+
+     Без параметров берутся тексты по умолчанию, они ниже в разметке.
+
+  3. Ничего настраивать в бэкенде не нужно: форма шлёт POST на
+     /api/v2/form/callback, этот путь уже проксируется nginx (location
+     /api/v2/) на контейнер API.
+
+  ЧТО ПРОИСХОДИТ ПОСЛЕ ОТПРАВКИ
+  -----------------------------
+  Заявка ложится в ту же таблицу contact_form, что и обычная форма связи:
+  contact_type = phone, тема "Другое", текст "Запрос обратного звонка".
+  Менеджеру уходит уведомление в Telegram — фоном, уже после ответа
+  браузеру, см. app/routers/form.py.
+
+  Скрытых полей с темой и типом контакта здесь нет намеренно: их проставляет
+  сервер. Форма спрашивает только то, что человек действительно вводит, —
+  имя и телефон.
+
+  Сообщение о результате показывает общий компонент .es-toast из
+  partials/form-status.html, тот же, что у контактной формы.
+*/}}
+
+{{ partial "form-status.html" .Page }}
+
+<div id="callback-widget">
+    <div class="callback-header">
+        <h3>{{ .Get "title" | default "📞 Не нашли подходящее решение?" }}</h3>
+        <p>{{ .Get "text" | default "Оставьте номер — перезвоним и обсудим вашу задачу." }}</p>
+    </div>
+
+    <form id="callback-form" class="callback-form">
+        <div class="callback-row">
+            <input type="text" id="callback-name" name="name"
+                   placeholder="Ваше имя" required autocomplete="name">
+        </div>
+
+        <div class="callback-row">
+            <input type="tel" id="callback-phone" name="phone"
+                   placeholder="+7 900 000-00-00" required autocomplete="tel">
+        </div>
+
+        <p class="callback-consent">
+            Нажимая на кнопку <strong>«Перезвоните мне»</strong>, вы соглашаетесь на
+            обработку персональных данных в соответствии с
+            <a href="/privacy-policy/" target="_blank">Политикой конфиденциальности</a>.
+        </p>
+
+        <button type="submit" class="callback-submit">
+            <span class="btn-text">Перезвоните мне</span>
+            <span class="btn-loading" style="display: none;">Отправляем…</span>
+        </button>
+    </form>
+
+    <div id="callback-notification" class="es-toast"></div>
+</div>
+
+<style>
+/* === Контейнер ===
+   Цвета те же, что у кнопок контактной формы (#0077b6 → #0096c7), чтобы
+   виджет читался как часть сайта, а не как вставка со стороны. */
+#callback-widget {
+    max-width: 500px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: linear-gradient(135deg, #0077b6 0%, #0096c7 100%);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 119, 182, 0.25);
+}
+
+html[data-theme="dark"] #callback-widget {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* === Заголовок === */
+.callback-header {
+    margin-bottom: 1.5rem;
+    color: #fff;
+    text-align: center;
+}
+
+.callback-header h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.callback-header p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+    opacity: 0.95;
+}
+
+/* === Поля === */
+.callback-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.callback-row {
+    width: 100%;
+}
+
+/* Поля не наследуют оформление контактной формы: там правила начинаются
+   с #contact-form, а виджет стоит сам по себе и на цветной подложке. */
+#callback-widget input[type="text"],
+#callback-widget input[type="tel"] {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.9rem 1.1rem;
+    font-size: 1rem;
+    color: #333;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
+}
+
+#callback-widget input[type="text"]:focus,
+#callback-widget input[type="tel"]:focus {
+    background: #fff;
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+}
+
+#callback-widget input::placeholder {
+    color: #8a8a8a;
+}
+
+.callback-consent {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.callback-consent a {
+    color: #fff;
+    text-decoration: underline;
+}
+
+/* === Кнопка === */
+.callback-submit {
+    padding: 0.9rem 2rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0077b6;
+    background: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.callback-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.callback-submit:active {
+    transform: translateY(0);
+}
+
+.callback-submit:disabled {
+    opacity: 0.6;
+    cursor: progress;
+    transform: none;
+}
+
+@media (max-width: 600px) {
+    #callback-widget {
+        margin: 1.5rem 1rem;
+        padding: 1.5rem;
+    }
+
+    .callback-header h3 {
+        font-size: 1.25rem;
+    }
+}
+</style>
+
+<script>
+(function () {
+    const form = document.getElementById("callback-form");
+    const nameInput = document.getElementById("callback-name");
+    const phoneInput = document.getElementById("callback-phone");
+    const submitBtn = form.querySelector(".callback-submit");
+    const btnText = submitBtn.querySelector(".btn-text");
+    const btnLoading = submitBtn.querySelector(".btn-loading");
+    const notification = document.getElementById("callback-notification");
+
+    // Код страны фиксированный. Определять его по IP через внешний сервис
+    // нельзя: это передача адреса посетителя третьей стороне, не описанная
+    // в политике обработки данных.
+    const COUNTRY_CODE = "+7";
+    let codeInserted = false;
+
+    // Код подставляется при первом фокусе, а не в value: иначе placeholder
+    // не виден и поле выглядит уже заполненным.
+    phoneInput.addEventListener("focus", function () {
+        if (codeInserted || this.value.trim()) return;
+        this.value = COUNTRY_CODE + " ";
+        codeInserted = true;
+        // Курсор в конец — иначе он останется перед кодом.
+        setTimeout(() => this.setSelectionRange(this.value.length, this.value.length), 0);
+    });
+
+    // Оформление и таймер — в partials/form-status.html. Здесь только тексты.
+    const showNotification = (message, kind) => esToast(notification, message, kind);
+
+    // Кнопка блокируется на время запроса. Быстрого ответа бэкенда для этого
+    // мало: сеть у посетителя может быть медленной, а повторное нажатие
+    // создаёт дубль заявки.
+    let sending = false;
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (sending) return;
+
+        // Проверка до запроса, чтобы человек не ждал ответа ради очевидного.
+        // Серверная проверка та же и остаётся главной — см. CallbackRequest.
+        const phone = phoneInput.value.trim();
+        if (phone.replace(/\D/g, "").length < 7) {
+            showNotification("Введите корректный номер телефона.", "error");
+            phoneInput.focus();
+            return;
+        }
+
+        sending = true;
+        submitBtn.disabled = true;
+        btnText.style.display = "none";
+        btnLoading.style.display = "inline";
+
+        try {
+            const response = await fetch("/api/v2/form/callback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: nameInput.value.trim(),
+                    phone: phone,
+                    source: "{{ .Page.RelPermalink }}",
+                }),
+            });
+
+            if (response.ok) {
+                if (window.sendMetrikaGoal) {
+                    window.sendMetrikaGoal("callback_request_success");
+                }
+                showNotification("Спасибо! Перезвоним в ближайшее время.", "ok");
+                form.reset();
+                codeInserted = false;
+                return;
+            }
+
+            // 422 от pydantic приходит списком: detail[0].msg содержит причину.
+            // Показываем её человеку, а весь ответ отправляем в консоль.
+            const payload = await response.json().catch(() => null);
+            console.error("Запрос звонка отклонён:", response.status, payload);
+
+            let reason = "Проверьте имя и номер телефона.";
+            if (payload && Array.isArray(payload.detail) && payload.detail.length) {
+                reason = String(payload.detail[0].msg || reason).replace(/^Value error,\s*/, "");
+            }
+            showNotification("Не отправлено. " + reason, "error");
+        } catch (err) {
+            console.error("Сбой отправки запроса звонка:", err);
+            showNotification("Не удалось связаться с сервером. Проверьте соединение.", "error");
+        } finally {
+            sending = false;
+            submitBtn.disabled = false;
+            btnText.style.display = "inline";
+            btnLoading.style.display = "none";
+        }
+    });
+})();
+</script>

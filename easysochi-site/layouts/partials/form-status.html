@@ -1,0 +1,148 @@
+{{/*
+  Общий вид сообщений о результате отправки форм.
+
+  Подключается как {{ partial "form-status.html" . }} (из партиала) или
+  {{ partial "form-status.html" .Page }} (из шорткода). Повторные вызовы
+  на одной странице ничего не дублируют — стоит защёлка на .Scratch.
+
+  Компонент перенесён с easy-sochi.ru, где им пользуются три формы сразу.
+  Здесь его пока использует только форма обратного звонка. Контактную форму
+  на него намеренно не переводили: она сообщает о результате своим блоком
+  .contact-form-status, это поведение проверено и менять его незачем. Если
+  на сайте появится третья форма — брать отсюда, а не писать заново.
+
+  Два представления, потому что механика у форм разная и сводить её к одной
+  нельзя:
+    .es-status — блок внутри формы. Годится, когда форма остаётся на экране.
+    .es-toast  — плашка поверх страницы. Нужна там, где форма компактная и
+                 место под сообщение внутри неё занимать нечем.
+
+  Анимации нет намеренно. И transition, и @keyframes рисуются кадрами, а
+  кадры не идут, когда вкладка не отрисовывается — например, если человек
+  переключился на другую сразу после отправки. Плашка тогда застревает на
+  первом кадре, то есть на opacity: 0, и гаснет по таймеру, так и не
+  показавшись. Оформление не должно уметь прятать содержимое.
+*/}}
+{{- if not (.Scratch.Get "esFormStatusLoaded") -}}
+{{- .Scratch.Set "esFormStatusLoaded" true -}}
+<style>
+/* Общая палитра сообщений. Пастельные тона с рамкой, а не заливка цветом:
+   сообщение должно читаться и не спорить с остальной страницей. */
+.es-status,
+.es-toast {
+    box-sizing: border-box;
+    border-radius: 10px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: left;
+}
+
+.es-status--ok,
+.es-toast--ok {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.es-status--error,
+.es-toast--error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* На тёмной теме пастель светится на весь экран. Те же два цвета, но
+   в тёмных тонах: сообщение остаётся узнаваемым и не бьёт по глазам. */
+html[data-theme="dark"] .es-status--ok,
+html[data-theme="dark"] .es-toast--ok {
+    background: #173a26;
+    color: #d6f5e0;
+    border-color: #245c3c;
+}
+
+html[data-theme="dark"] .es-status--error,
+html[data-theme="dark"] .es-toast--error {
+    background: #3d1d21;
+    color: #f8d7da;
+    border-color: #6b2f36;
+}
+
+/* --- Сообщение внутри формы --- */
+.es-status {
+    display: none;
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+}
+
+.es-status.es-status--ok,
+.es-status.es-status--error {
+    display: block;
+}
+
+/* --- Плашка поверх страницы --- */
+.es-toast {
+    display: none;
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Ширина задана явно, а не отдана на откуп shrink-to-fit: у блока с
+       position: fixed и left: 50% доступное место считается от левого края
+       до правого края экрана, то есть ровно половина ширины — и плашка
+       схлопывается на телефоне почти вдвое. */
+    width: calc(100vw - 32px);
+    max-width: 560px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    /* Шапка PaperMod липкая и лежит на z-index: 10 — плашка должна быть
+       над ней, иначе на прокрученной странице она уезжает под меню. */
+    z-index: 10100;
+}
+
+html[data-theme="dark"] .es-toast {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.es-toast.es-toast--ok,
+.es-toast.es-toast--error {
+    display: block;
+}
+</style>
+
+<script>
+(function () {
+    // Сообщение гаснет само — и об успехе, и об ошибке. Плашка сообщает
+    // результат отправки, а дальше человек возвращается к форме, и висящий
+    // поверх неё текст только мешает: на телефоне он занимает верх экрана.
+    //
+    // Повторная отправка сбрасывает таймер, так что новое сообщение всегда
+    // живёт свои пять секунд целиком, а не доживает чужие.
+    var HIDE_MS = 5000;
+
+    var timers = new WeakMap();
+
+    function show(el, message, kind, base) {
+        if (!el) return;
+
+        clearTimeout(timers.get(el));
+
+        el.textContent = message;
+        el.className = base + " " + base + "--" + (kind === "ok" ? "ok" : "error");
+
+        timers.set(el, setTimeout(function () {
+            el.className = base;
+        }, HIDE_MS));
+    }
+
+    // Блок внутри формы.
+    window.esFormStatus = function (el, message, kind) {
+        show(el, message, kind, "es-status");
+    };
+
+    // Плашка поверх страницы.
+    window.esToast = function (el, message, kind) {
+        show(el, message, kind, "es-toast");
+    };
+})();
+</script>
+{{- end -}}

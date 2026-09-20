@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from app.routers import form, donations
+from app.services.email_sender import describe_configuration
 
 # Логи приложения: без явной настройки корневого логгера сообщения уровня
 # INFO из наших модулей никуда не попадают — у root остаётся уровень WARNING.
@@ -42,6 +43,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def log_notification_setup():
+    """Одна строка в лог о том, как настроена почта.
+
+    Переменную мало завести в .env: её надо ещё добавить в environment
+    контейнера в deploy/docker-compose.yml, иначе приложение её не увидит.
+    Без этой строки о промахе узнаёшь по первой пропавшей заявке, а не по
+    логу запуска.
+    """
+    logger.info("Уведомления, почта: %s", describe_configuration())
+
 
 @app.get("/health")
 async def health():
